@@ -434,7 +434,7 @@ pub fn run() {
           .layer(CorsLayer::permissive());
 
         *server_status.lock().unwrap() = "Step 2: Binding port 8080...".to_string();
-        
+
         // Add a small 2-second delay to ensure the OS has released the port from previous crashes
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
