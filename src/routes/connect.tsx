@@ -41,9 +41,9 @@ export const Connect: React.FC = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 pb-20 font-[family-name:var(--font-inter-sans)] flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-slate-50 p-8 pb-20 font-serif flex flex-col items-center justify-center">
       <header className="mb-12 w-full flex flex-col items-center max-w-3xl">
-        <h1 className="text-4xl md:text-6xl text-center font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-cyan-600 mb-8 tracking-tight">
+        <h1 className="text-4xl md:text-6xl text-center font-black text-slate-800 mb-8 tracking-tight">
           Timecard
         </h1>
         <p className="text-xl text-slate-500 mb-4 font-medium text-center">
@@ -70,7 +70,7 @@ export const Connect: React.FC = () => {
             </h2>
             <div className="flex flex-col gap-6 text-xl">
               <p className="text-slate-600">
-                <span className="font-black text-cyan-600 text-2xl mr-3">
+                <span className="font-black text-slate-700 text-2xl mr-3">
                   1.
                 </span>
                 Join Wi-Fi:{" "}
@@ -79,7 +79,7 @@ export const Connect: React.FC = () => {
                 </strong>
               </p>
               <p className="text-slate-600">
-                <span className="font-black text-cyan-600 text-2xl mr-3">
+                <span className="font-black text-slate-700 text-2xl mr-3">
                   2.
                 </span>
                 Open Camera & scan QR code!
