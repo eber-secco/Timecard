@@ -418,6 +418,8 @@ pub fn run() {
       };
 
       tauri::async_runtime::spawn(async move {
+        *server_status.lock().unwrap() = "Step 1: Building router...".to_string();
+
         let axum_app = Router::new()
           .route("/", get(serve_uploader))
           .route("/api/accounts", post(api_create_account))
@@ -430,6 +432,11 @@ pub fn run() {
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)
           .layer(CorsLayer::permissive());
+
+        *server_status.lock().unwrap() = "Step 2: Binding port 8080...".to_string();
+        
+        // Add a small 2-second delay to ensure the OS has released the port from previous crashes
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
         match tokio::net::TcpListener::bind("0.0.0.0:8080").await {
           Ok(listener) => {
