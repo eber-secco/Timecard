@@ -425,7 +425,7 @@ pub fn run() {
           .route("/api/accounts", post(api_create_account))
           .route("/api/login", post(api_login))
           .route("/api/people", post(api_create_person))
-          .route("/api/my-people/:account_id", get(api_get_my_people))
+          .route("/api/my-people/{account_id}", get(api_get_my_people))
           .route("/api/join", post(api_join_timeline))
           .route("/api/switch", post(api_switch_active))
           .route("/api/events", post(api_add_memory)) // The new memory endpoint
