@@ -5,12 +5,22 @@ import QRCode from "react-qr-code";
 
 export const Connect: React.FC = () => {
   const [kioskUrl, setKioskUrl] = useState<string>("http://192.168.0.103:8080");
+  const [serverStatus, setServerStatus] = useState<string>("Starting...");
   const navigate = useNavigate();
 
   useEffect(() => {
     void invoke<string>("get_kiosk_url")
       .then((url) => setKioskUrl(url))
       .catch(console.error);
+
+    const checkStatus = () => {
+      void invoke<string>("get_server_status")
+        .then((s) => setServerStatus(s))
+        .catch((e) => setServerStatus(`Tauri Error: ${e}`));
+    };
+
+    checkStatus();
+    const statusInterval = setInterval(checkStatus, 3000);
 
     const interval = setInterval(() => {
       void invoke("get_current_display_state")
@@ -24,7 +34,10 @@ export const Connect: React.FC = () => {
         .catch(console.error);
     }, 2000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(interval);
+    };
   }, [navigate]);
 
   return (
@@ -37,9 +50,22 @@ export const Connect: React.FC = () => {
           Connect Your Phone to begin.
         </p>
 
+        {/* Server Status Warning */}
+        {serverStatus !== "Running" && (
+          <div className="w-full bg-red-50 border-2 border-red-200 p-6 rounded-2xl mb-8 flex flex-col items-center animate-pulse">
+            <h3 className="text-red-700 font-bold text-xl mb-1">
+              ⚠️ Connection Problem
+            </h3>
+            <p className="text-red-600 font-medium">{serverStatus}</p>
+            <p className="text-red-500 text-sm mt-2 font-mono">
+              Check if another app is using port 8080
+            </p>
+          </div>
+        )}
+
         <div className="bg-white p-8 md:p-12 rounded-3xl shadow-2xl shadow-cyan-900/10 border border-slate-200 flex flex-col md:flex-row items-center gap-12 my-6 w-full justify-between">
           <div className="flex flex-col items-center md:items-start text-center md:text-left">
-            <h2 className="text-3xl font-bold text-slate-800 mb-6">
+            <h2 className="text-3xl font-bold text-slate-800 mb-6 font-serif">
               Create a Profile
             </h2>
             <div className="flex flex-col gap-6 text-xl">

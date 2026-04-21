@@ -74,6 +74,12 @@ pub struct AddMemoryRequest {
 struct AppState {
   db: Arc<Mutex<Connection>>,
   active_person_id: Arc<Mutex<Option<i64>>>,
+  server_status: Arc<Mutex<String>>,
+}
+
+#[tauri::command]
+fn get_server_status(state: State<AppState>) -> String {
+  state.server_status.lock().unwrap().clone()
 }
 
 #[derive(Clone)]
@@ -396,11 +402,13 @@ pub fn run() {
 
       let shared_db = Arc::new(Mutex::new(conn));
       let active_person = Arc::new(Mutex::new(None));
+      let server_status = Arc::new(Mutex::new("Starting...".to_string()));
 
       // Tauri App State
       app.manage(AppState {
         db: shared_db.clone(),
         active_person_id: active_person.clone(),
+        server_status: server_status.clone(),
       });
 
       // Spawn the Axum server
@@ -423,9 +431,18 @@ pub fn run() {
           .with_state(axum_state)
           .layer(CorsLayer::permissive());
 
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-        println!("🚀 Local Kiosk Server listening on http://0.0.0.0:8080");
-        axum::serve(listener, axum_app).await.unwrap();
+        match tokio::net::TcpListener::bind("0.0.0.0:8080").await {
+          Ok(listener) => {
+            *server_status.lock().unwrap() = "Running".to_string();
+            println!("🚀 Local Kiosk Server listening on http://0.0.0.0:8080");
+            if let Err(e) = axum::serve(listener, axum_app).await {
+              *server_status.lock().unwrap() = format!("Server Error: {}", e);
+            }
+          }
+          Err(e) => {
+             *server_status.lock().unwrap() = format!("Network Error: {}", e);
+          }
+        }
       });
 
       Ok(())
@@ -435,6 +452,7 @@ pub fn run() {
       get_events,
       get_kiosk_url,
       get_current_display_state,
+      get_server_status,
       close_app
     ])
     .run(tauri::generate_context!())
