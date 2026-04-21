@@ -19,10 +19,16 @@ export function TimecardDisplay() {
   const [person, setPerson] = useState<Person | null>(null);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false); // Default to false for scrubber experience
   const [focusMode, setFocusMode] = useState(false);
+  const [interactionStarted, setInteractionStarted] = useState(false);
+
+  // Scrubber State
+  const [scrubberX, setScrubberX] = useState(window.innerWidth / 2);
+  const [isDragging, setIsDragging] = useState(false);
 
   const stripRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void invoke<Person | null>("get_current_display_state")
@@ -47,94 +53,85 @@ export function TimecardDisplay() {
           setEvents(data);
         })
         .catch((err) => {
-          console.warn("Using Mock Events (Backend missing):", err);
-          setEvents([
-            {
-              id: 1,
-              person_id: 1,
-              title: "First Steps",
-              description:
-                "Taking off in the living room for the very first time! She was so brave.",
-              event_date: "2007-06-12",
-              image_url:
-                "https://images.unsplash.com/photo-1522771930-78848d9293e8?w=800&q=80",
-            },
-            {
-              id: 2,
-              person_id: 1,
-              title: "Tummy Time Setup",
-              description:
-                "Testing out the new soft blue blanket in the nursery.",
-              event_date: "2006-11-20",
-              image_url:
-                "https://images.unsplash.com/photo-1544126592-807ca20e29d7?w=800&q=80",
-            },
-            {
-              id: 3,
-              person_id: 1,
-              title: "Smash Cake!",
-              description: "First birthday party chaos at the park.",
-              event_date: "2007-06-08",
-              image_url:
-                "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=800&q=80",
-            },
-            {
-              id: 4,
-              person_id: 1,
-              title: "Beach Day",
-              description:
-                "Summer trip to the coastal bay. Collected seashells all afternoon.",
-              event_date: "2009-08-14",
-              image_url:
-                "https://images.unsplash.com/photo-1471286174890-9c112225d57b?w=800&q=80",
-            },
-          ]);
+          console.warn("Using Mock Events:", err);
         });
     };
 
     fetchEvents();
-    const interval = setInterval(fetchEvents, 5000); // Check for new uploads every 5 seconds
-
+    const interval = setInterval(fetchEvents, 5000);
     return () => clearInterval(interval);
   }, [personId]);
 
-  // Slideshow Logic
-  useEffect(() => {
-    if (!isPlaying || events.length === 0) return;
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % events.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [isPlaying, events.length]);
-
-  const PIXELS_PER_YEAR = 12; // Adjusted for 10.1-inch display to show more context span
-
+  const PIXELS_PER_YEAR = 12;
   const birthYear = person?.birth_date
     ? parseInt(person.birth_date.substring(0, 4), 10)
     : 1970;
-  // Pad the timeline so the start is a clean decade.
-  const startDecade = Math.floor(birthYear / 10) * 10;
+  const startDecade = Math.floor(birthYear / 10) * 10 - 10;
   const endDecade = Math.ceil(new Date().getFullYear() / 10) * 10 + 10;
 
-  // Auto-scroll the strip to center the active item PRECISELY on its timeline pixel coordinate
+  // Generate Hierarchical Ticks (4 per year)
+  const ticks = [];
+  for (let y = startDecade; y <= endDecade; y += 0.25) {
+    ticks.push({
+      val: y,
+      isDecade: Math.abs(y % 10) < 0.01,
+      isYear: Math.abs(y % 1) < 0.01,
+      isQuarter: true,
+    });
+  }
+
+  // Handle Scrubber/Drag Logic
   useEffect(() => {
-    if (stripRef.current && events.length > 0) {
-      const container = stripRef.current;
-      const activeEvent = events[activeIndex];
-      if (activeEvent) {
-        const date = new Date(activeEvent.event_date);
-        const fractionalYear = date.getFullYear() + date.getMonth() / 12;
-        const leftOffset = (fractionalYear - startDecade) * PIXELS_PER_YEAR;
-        container.scrollTo({ left: leftOffset, behavior: "smooth" });
+    if (!stripRef.current || events.length === 0) return;
+
+    const container = stripRef.current;
+
+    // Calculate fractional year based on scrubber position + scroll
+    const scrollLeft = container.scrollLeft;
+    const timelineOffset = scrubberX - window.innerWidth / 2 + scrollLeft;
+    const currentYear = startDecade + timelineOffset / PIXELS_PER_YEAR;
+
+    // Find closest event
+    let closestIdx = 0;
+    let minDiff = Number.MAX_VALUE;
+    events.forEach((ev, idx) => {
+      const evYear =
+        new Date(ev.event_date).getFullYear() +
+        new Date(ev.event_date).getMonth() / 12;
+      const diff = Math.abs(evYear - currentYear);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = idx;
       }
+    });
+
+    if (closestIdx !== activeIndex) {
+      setActiveIndex(closestIdx);
     }
-  }, [activeIndex, events, startDecade]);
+  }, [scrubberX, events, activeIndex, startDecade]);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    setInteractionStarted(true);
+    setScrubberX(e.clientX);
+    setIsPlaying(false);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setScrubberX(e.clientX);
+    }
+  };
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
 
   if (!person) {
     return (
-      <div className="min-h-screen bg-[#e0f2fe] text-slate-900 flex flex-col items-center justify-center">
-        <h1 className="text-3xl text-cyan-700 animate-pulse font-bold tracking-widest uppercase">
-          Loading Framework...
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-serif">
+        <h1 className="text-3xl text-slate-400 animate-pulse uppercase tracking-[0.2em] font-light">
+          Initializing Timecard...
         </h1>
       </div>
     );
@@ -142,136 +139,20 @@ export function TimecardDisplay() {
 
   const activeEvent = events[activeIndex];
 
-  // Helper for pseudo-random scattered heights for the collage effect
-  const getScatteredOffset = (index: number) => {
-    const offsets = ["-60px", "-20px", "20px", "60px", "0px", "-40px", "40px"];
-    return offsets[index % offsets.length];
-  };
-
-  // Helper for pseudo-random scattered width widths
-  const getScatteredSize = (index: number) => {
-    const sizes = ["w-20 h-20", "w-28 h-20", "w-20 h-28", "w-24 h-24"];
-    return sizes[index % sizes.length];
-  };
-
-  // Generate ruler ticks (every 1 year)
-  const ticks = [];
-  for (let y = startDecade; y <= endDecade; y++) {
-    ticks.push({ year: y, isMajor: y % 10 === 0, isMedium: y % 5 === 0 });
-  }
-
-  // Unified Middle and Bottom Scattered Photo Track
-  const timelineContent = (
-    <div className="absolute top-[45%] w-full h-[55vh] z-30 pointer-events-none">
-      <div
-        ref={stripRef}
-        className="w-full h-full overflow-x-hidden flex items-start pointer-events-auto"
-        style={{ scrollBehavior: "smooth" }}
-      >
-        {/* Start Padding - pushes coordinate 0 to exactly the center of the screen */}
-        <div className="w-[50vw] h-full flex-shrink-0" />
-
-        {/* Timeline Coordinate System Block */}
-        <div
-          className="relative h-full flex-shrink-0"
-          style={{ width: `${(endDecade - startDecade) * PIXELS_PER_YEAR}px` }}
-        >
-          {/* === RULER ABSOLUTE LAYER === */}
-          <div className="absolute bottom-[20%] w-full h-16 opacity-60">
-            {ticks.map((tick) => (
-              <div
-                key={tick.year}
-                className="absolute top-0 flex flex-col items-center justify-between"
-                style={{
-                  left: `${(tick.year - startDecade) * PIXELS_PER_YEAR}px`,
-                  transform: "translateX(-50%)",
-                  height: "100%",
-                }}
-              >
-                {tick.isMajor ? (
-                  <>
-                    <div className="w-[1.5px] h-5 bg-slate-800" />
-                    <span className="font-sans text-lg tracking-widest text-slate-800 -my-1 font-semibold">
-                      {tick.year}
-                    </span>
-                    <div className="w-[1.5px] h-5 bg-slate-800" />
-                  </>
-                ) : tick.isMedium ? (
-                  <>
-                    <div className="w-[1.5px] h-3 bg-slate-600" />
-                    <div className="flex-grow" />
-                    <div className="w-[1.5px] h-3 bg-slate-600" />
-                  </>
-                ) : (
-                  <>
-                    <div className="w-[1px] h-1.5 bg-slate-400" />
-                    <div className="flex-grow" />
-                    <div className="w-[1px] h-1.5 bg-slate-400" />
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* === EVENTS ABSOLUTE LAYER === */}
-          <div className="absolute top-0 w-full h-[30vh]">
-            {events.map((event, i) => {
-              const date = new Date(event.event_date);
-              const fractionalYear = date.getFullYear() + date.getMonth() / 12;
-              return (
-                <div
-                  key={event.id}
-                  className={`absolute top-0 transform -translate-x-1/2 cursor-pointer transition-all duration-500 ease-out hover:z-50 ${
-                    activeIndex === i
-                      ? "z-40 scale-110 shadow-cyan-900/20"
-                      : "z-20 opacity-80 hover:opacity-100 hover:scale-105"
-                  }`}
-                  style={{
-                    left: `${(fractionalYear - startDecade) * PIXELS_PER_YEAR}px`,
-                    marginTop: getScatteredOffset(i),
-                  }}
-                  onClick={() => {
-                    setActiveIndex(i);
-                    setIsPlaying(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      setActiveIndex(i);
-                      setIsPlaying(false);
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                >
-                  <img
-                    src={event.image_url}
-                    className={`${getScatteredSize(i)} max-h-[22vh] object-cover border-4 ${
-                      activeIndex === i ? "border-sky-400" : "border-white"
-                    } shadow-lg`}
-                    alt=""
-                    draggable={false}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* End Padding to allow the final event to freely reach the screen center */}
-        <div className="w-[50vw] h-full flex-shrink-0" />
-      </div>
-    </div>
-  );
-
   return (
-    <div className="bg-slate-50 min-h-screen text-slate-800 font-sans overflow-hidden flex flex-col relative w-full h-full select-none cursor-default">
+    <div
+      ref={containerRef}
+      className="bg-slate-50 min-h-screen text-slate-800 font-serif overflow-hidden flex flex-col relative w-full h-full select-none cursor-default"
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+    >
       {/* Kiosk Exit Button (Top Left) */}
       <button
         type="button"
         onClick={() => {
           void invoke("close_app");
         }}
-        className="absolute top-4 left-4 z-[100] opacity-0 hover:opacity-100 transition-opacity p-2 text-slate-300 hover:text-slate-600 cursor-pointer pointer-events-auto"
+        className="absolute top-4 left-4 z-[300] opacity-0 hover:opacity-100 transition-opacity p-2 text-slate-300 hover:text-slate-600 cursor-pointer pointer-events-auto"
         title="Exit"
       >
         <svg
@@ -292,159 +173,159 @@ export function TimecardDisplay() {
         </svg>
       </button>
 
-      {/* Background Grid Pattern (Subtle) */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] opacity-[0.15] z-0 pointer-events-none"></div>
+      {/* Background Grid */}
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] opacity-[0.05] z-0 pointer-events-none"></div>
 
-      {activeEvent && (
-        <>
-          {/* Top Focus Section */}
-          <div className="absolute top-[8%] w-full flex justify-center z-20 transition-all duration-700 ease-in-out pointer-events-none">
-            <div className="flex gap-6 items-start max-w-3xl transform">
-              <div
-                className="relative cursor-pointer pointer-events-auto transform transition-transform duration-300 hover:scale-105"
-                onClick={() => setFocusMode(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") setFocusMode(true);
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <img
-                  src={activeEvent.image_url}
-                  alt={activeEvent.title}
-                  className="w-56 h-56 object-cover object-center bg-white p-2.5 pb-8 shadow-2xl transition-transform duration-700"
-                  style={{ transform: "rotate(-2deg)" }}
-                />
-                <div className="absolute bottom-3 left-0 w-full text-center text-slate-400 text-[10px] tracking-widest uppercase font-semibold pointer-events-none">
-                  Expand
-                </div>
-              </div>
-              <div className="pt-4 max-w-sm">
-                <h2 className="text-xl text-slate-500 font-light mb-1">
-                  {new Date(activeEvent.event_date).toLocaleDateString(
-                    undefined,
-                    { year: "numeric", month: "long", day: "numeric" },
-                  )}
-                </h2>
-                <h3 className="text-3xl font-semibold text-slate-800 leading-tight mb-2">
-                  {activeEvent.title}
-                </h3>
-                <p className="text-slate-600 text-lg leading-relaxed line-clamp-4">
-                  {activeEvent.description}
-                </p>
+      {/* Top Focus Section (Conditional) */}
+      {interactionStarted && activeEvent && (
+        <div className="absolute top-[5%] w-full flex justify-center z-20 pointer-events-none animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="flex gap-8 items-start max-w-4xl transform">
+            <div
+              className="relative cursor-pointer pointer-events-auto transform transition-transform duration-300 hover:scale-105 active:scale-95 group"
+              onClick={() => setFocusMode(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setFocusMode(true);
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <img
+                src={activeEvent.image_url}
+                alt=""
+                className="w-60 h-60 object-cover bg-white p-3 pb-10 shadow-2xl transition-all duration-700 group-hover:shadow-cyan-900/10"
+                style={{ transform: "rotate(-1.5deg)" }}
+              />
+              <div className="absolute bottom-4 left-0 w-full text-center text-slate-400 text-[10px] tracking-[0.3em] uppercase font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                Full Focus
               </div>
             </div>
+            <div className="pt-6 max-w-sm">
+              <h2 className="text-2xl text-slate-400 font-light italic mb-1">
+                {new Date(activeEvent.event_date).toLocaleDateString(
+                  undefined,
+                  { year: "numeric", month: "long" },
+                )}
+              </h2>
+              <h3 className="text-4xl font-bold text-slate-800 leading-tight mb-3">
+                {activeEvent.title}
+              </h3>
+              <p className="text-slate-600 text-xl leading-relaxed font-light line-clamp-3">
+                {activeEvent.description}
+              </p>
+            </div>
           </div>
-
-          {/* Thin Vertical Alignment Line */}
-          <div className="absolute left-[50%] top-0 bottom-[10%] w-[2px] bg-red-500 z-50"></div>
-        </>
-      )}
-
-      {events.length === 0 && (
-        <div className="absolute top-[20%] w-full flex justify-center z-20">
-          <p className="text-xl text-slate-400 italic">
-            No memories uploaded yet.
-          </p>
         </div>
       )}
 
-      {/* Middle and Bottom Unified Scrolling Track */}
-      {timelineContent}
+      {/* Scrubber Handles / Interaction Zone */}
+      <div
+        className="absolute inset-x-0 top-[35%] bottom-[15%] z-50 cursor-crosshair"
+        onPointerDown={handlePointerDown}
+      >
+        <div
+          className="absolute top-0 bottom-0 w-[2px] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all duration-75"
+          style={{ left: `${scrubberX}px`, transform: "translateX(-50%)" }}
+        >
+          <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-4 bg-red-500 rounded-full" />
+          <div className="absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-4 h-4 bg-red-500 rounded-full" />
+        </div>
+      </div>
 
-      {/* Bottom Center Name Plate */}
-      <div className="absolute bottom-[8%] w-full flex flex-col items-center z-20 pointer-events-none">
-        <h1 className="text-2xl tracking-[0.2em] uppercase text-slate-700 font-bold mb-1 bg-white/80 px-5 py-1 rounded-full shadow-sm">
+      {/* Timeline Strip */}
+      <div className="absolute top-[50%] w-full h-[35vh] z-30 pointer-events-none">
+        <div
+          ref={stripRef}
+          className="w-full h-full overflow-x-hidden flex items-start pointer-events-auto no-scrollbar"
+        >
+          <div className="w-[50vw] h-full flex-shrink-0" />
+          <div
+            className="relative h-full flex-shrink-0"
+            style={{
+              width: `${(endDecade - startDecade) * PIXELS_PER_YEAR}px`,
+            }}
+          >
+            {/* RULER */}
+            <div className="absolute bottom-[10%] w-full h-24 pointer-events-none">
+              {ticks.map((tick) => (
+                <div
+                  key={tick.val}
+                  className="absolute bottom-0 flex flex-col items-center"
+                  style={{
+                    left: `${(tick.val - startDecade) * PIXELS_PER_YEAR}px`,
+                    transform: "translateX(-50%)",
+                  }}
+                >
+                  {tick.isDecade ? (
+                    <div className="flex flex-col items-center">
+                      <span className="text-sm font-bold text-slate-800 mb-2">
+                        {tick.val}
+                      </span>
+                      <div className="w-[1.5px] h-12 bg-slate-800" />
+                    </div>
+                  ) : tick.isYear ? (
+                    <div className="w-[1px] h-6 bg-slate-600 opacity-60" />
+                  ) : (
+                    <div className="w-[0.5px] h-3 bg-slate-400 opacity-40" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* COLLAGE PHOTOS (Clamped) */}
+            <div className="absolute top-0 w-full h-[60%]">
+              {events.map((event, i) => {
+                const date = new Date(event.event_date);
+                const year = date.getFullYear() + date.getMonth() / 12;
+                return (
+                  <div
+                    key={event.id}
+                    className={`absolute transform -translate-x-1/2 pointer-events-none transition-all duration-300 ${activeIndex === i ? "scale-110 opacity-100 z-10" : "scale-90 opacity-40 z-0"}`}
+                    style={{
+                      left: `${(year - startDecade) * PIXELS_PER_YEAR}px`,
+                      top: `${(i % 3) * 20}%`,
+                    }}
+                  >
+                    <img
+                      src={event.image_url}
+                      className="w-20 h-20 object-cover border-4 border-white shadow-md rounded-md"
+                      alt=""
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="w-[50vw] h-full flex-shrink-0" />
+        </div>
+      </div>
+
+      {/* Name Plate */}
+      <div className="absolute bottom-[6%] w-full flex flex-col items-center z-10 pointer-events-none">
+        <h1 className="text-3xl tracking-[0.3em] uppercase text-slate-800 font-bold font-serif mb-1">
           {person.name}
         </h1>
-        <p className="text-sm tracking-widest text-slate-500 font-semibold bg-white/80 px-4 py-0.5 rounded-full mt-1 shadow-sm">
-          {new Date(person.birth_date).toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-          {person.dead_date &&
-            person.dead_date !== "Present" &&
-            ` - ${new Date(person.dead_date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}`}
+        <p className="text-lg tracking-widest text-slate-400 italic">
+          {new Date(person.birth_date).getFullYear()} —{" "}
+          {person.dead_date === "Present"
+            ? "Present"
+            : new Date(person.dead_date).getFullYear()}
         </p>
       </div>
 
-      {/* Control Buttons Overlay */}
-      <div className="absolute bottom-8 right-12 flex gap-8 z-50 text-xs tracking-widest uppercase font-semibold text-slate-400 pointer-events-auto">
-        <button
-          type="button"
-          className={`hover:text-slate-800 transition-colors cursor-pointer ${isPlaying ? "text-cyan-700 font-bold" : ""}`}
-          onClick={() => setIsPlaying(!isPlaying)}
-        >
-          {isPlaying ? "Pause" : "Slideshow"}
-        </button>
-      </div>
-
-      {/* ========== FULLSCREEN FOCUS MODAL ========== */}
+      {/* FULLSCREEN OVERLAY */}
       {focusMode && activeEvent && (
-        <div className="fixed inset-0 bg-slate-50 z-[100] flex flex-col items-center justify-center animate-in fade-in duration-300">
-          {/* Left Arrow */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveIndex(
-                (prev) => (prev - 1 + events.length) % events.length,
-              );
-              setIsPlaying(false);
-            }}
-            className="absolute left-12 top-1/2 transform -translate-y-1/2 opacity-20 hover:opacity-60 cursor-pointer text-slate-800"
-          >
-            <svg
-              role="img"
-              aria-label="Previous"
-              width="80"
-              height="120"
-              viewBox="0 0 24 24"
-            >
-              <title>Previous</title>
-              <path
-                fill="currentColor"
-                d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"
-              />
-            </svg>
-          </button>
-
-          {/* Right Arrow */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveIndex((prev) => (prev + 1) % events.length);
-              setIsPlaying(false);
-            }}
-            className="absolute right-12 top-1/2 transform -translate-y-1/2 opacity-20 hover:opacity-60 cursor-pointer text-slate-800"
-          >
-            <svg
-              role="img"
-              aria-label="Next"
-              width="80"
-              height="120"
-              viewBox="0 0 24 24"
-            >
-              <title>Next</title>
-              <path
-                fill="currentColor"
-                d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"
-              />
-            </svg>
-          </button>
-
-          {/* Center Polaroids Display */}
-          <div className="bg-white p-6 pb-12 shadow-[0_20px_60px_rgba(0,0,0,0.12)] relative transform transition-all duration-500 max-w-[80vw]">
+        <div className="fixed inset-0 bg-slate-50 z-[200] flex flex-col items-center justify-center p-12">
+          <div className="bg-white p-6 pb-16 shadow-2xl max-w-[80vw] animate-in zoom-in duration-500">
             <img
               src={activeEvent.image_url}
-              className="max-h-[60vh] object-contain border border-slate-100"
-              alt={activeEvent.title}
+              className="max-h-[70vh] object-contain"
+              alt=""
             />
-            {/* Title & Date embedded in the bottom of the white frame */}
-            <div className="absolute bottom-4 w-full left-0 flex justify-center items-center gap-3 text-slate-800 text-xl font-light tracking-wide">
-              <span>{activeEvent.title}</span>
-              <span className="w-[1.5px] h-6 bg-slate-400"></span>
-              <span>
+            <div className="mt-8 flex justify-between items-baseline border-t pt-4 border-slate-100">
+              <span className="text-3xl font-bold text-slate-800">
+                {activeEvent.title}
+              </span>
+              <span className="text-2xl text-slate-400 font-light italic">
                 {new Date(activeEvent.event_date).toLocaleDateString(
                   undefined,
                   { year: "numeric", month: "long" },
@@ -452,31 +333,16 @@ export function TimecardDisplay() {
               </span>
             </div>
           </div>
-
-          {/* Below Polaroids: Name */}
-          <div className="absolute bottom-12 uppercase tracking-[0.3em] text-slate-600 text-3xl font-medium">
-            {person.name}
-          </div>
-
-          {/* Global Close Button */}
           <button
             type="button"
             onClick={() => setFocusMode(false)}
-            className="absolute top-8 right-12 text-slate-400 hover:text-slate-800 text-sm tracking-widest uppercase font-bold"
+            className="absolute top-12 right-12 text-slate-400 hover:text-slate-800 text-sm tracking-widest uppercase font-bold p-4"
           >
-            Close
+            Close Display
           </button>
-
-          {/* Pause Overlay Button matches the standard timeline */}
-          <div className="absolute bottom-8 right-12 flex gap-8 z-50 text-xs tracking-widest uppercase font-semibold text-slate-400">
-            <button
-              type="button"
-              className={`hover:text-slate-800 transition-colors cursor-pointer ${isPlaying ? "text-cyan-700 font-bold" : ""}`}
-              onClick={() => setIsPlaying(!isPlaying)}
-            >
-              {isPlaying ? "Pause" : "Slideshow"}
-            </button>
-          </div>
+          <h1 className="absolute bottom-12 text-3xl tracking-[0.4em] uppercase text-slate-500 font-bold opacity-30">
+            {person.name}
+          </h1>
         </div>
       )}
     </div>
