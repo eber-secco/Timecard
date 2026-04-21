@@ -440,7 +440,7 @@ pub fn run() {
             }
           }
           Err(e) => {
-             *server_status.lock().unwrap() = format!("Network Error: {}", e);
+            *server_status.lock().unwrap() = format!("Network Error: {}", e);
           }
         }
       });
