@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TimelineEvent } from "../components/TimelineItem";
 
 export const Route = createFileRoute("/timecard/$personId")({
@@ -22,33 +22,22 @@ export function TimecardDisplay() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [pixelsPerYear, setPixelsPerYear] = useState(24);
-
-  // Drag-to-scroll State
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [scrollStartX, setScrollStartX] = useState(0);
+  const [pixelsPerYear, setPixelsPerYear] = useState(48);
 
   const stripRef = useRef<HTMLDivElement>(null);
-
-  const birthYear = person?.birth_date
-    ? parseInt(person.birth_date.substring(0, 4), 10)
-    : 1970;
-  const startDecade = Math.floor(birthYear / 10) * 10 - 10;
-  const endDecade = Math.ceil(new Date().getFullYear() / 10) * 10 + 10;
+  const scrollTimeoutRef = useRef<number | null>(null);
 
   // Sync the Active Person & Fetch Events
   useEffect(() => {
-    let _timeoutId: number;
-
     const fetchPersonAndEvents = () => {
-      // 1. Check if the active person changed on the backend
+      // 1. Sync active person state directly with DB
       void invoke<Person | null>("get_current_display_state")
         .then((data) => {
-          if (data && data.id.toString() !== personId) {
+          if (!data) return;
+          // Must overwrite local state unconditionally to avoid stale UI closures
+          setPerson(data);
+          if (data.id.toString() !== personId) {
             void navigate({ to: `/timecard/${data.id}` });
-          } else if (data && !person) {
-            setPerson(data);
           }
         })
         .catch(console.error);
@@ -58,7 +47,13 @@ export function TimecardDisplay() {
         personId: parseInt(personId, 10),
       })
         .then((data) => {
-          setEvents(data);
+          // Sort events by date to ensure proper timeline progression
+          const sorted = data.sort(
+            (a, b) =>
+              new Date(a.event_date).getTime() -
+              new Date(b.event_date).getTime(),
+          );
+          setEvents(sorted);
         })
         .catch(console.error);
     };
@@ -66,63 +61,61 @@ export function TimecardDisplay() {
     fetchPersonAndEvents();
     const interval = setInterval(fetchPersonAndEvents, 3000);
     return () => clearInterval(interval);
-  }, [personId, navigate, person]);
+  }, [personId, navigate]);
 
-  // Slideshow (Auto-advance)
+  const birthYear = person?.birth_date
+    ? parseInt(person.birth_date.substring(0, 4), 10)
+    : 1970;
+  const startDecade = Math.floor(birthYear / 10) * 10 - 10;
+  const endDecade = Math.ceil(new Date().getFullYear() / 10) * 10 + 10;
+
+  // Slideshow (Auto-advance) & Scroll Logic Helper
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      const ev = events[index];
+      if (ev && stripRef.current) {
+        const date = new Date(ev.event_date);
+        const evYear = date.getFullYear() + date.getMonth() / 12;
+        const targetScroll = (evYear - startDecade) * pixelsPerYear;
+        stripRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
+      }
+    },
+    [events, startDecade, pixelsPerYear],
+  );
+
   useEffect(() => {
-    if (!isPlaying || events.length === 0 || isDragging) return;
+    if (!isPlaying || events.length === 0 || focusMode) return;
     const interval = setInterval(() => {
       const nextIdx = (activeIndex + 1) % events.length;
-      setActiveIndex(nextIdx);
-      const ev = events[nextIdx];
-      if (ev && stripRef.current) {
-        const evYear =
-          new Date(ev.event_date).getFullYear() +
-          new Date(ev.event_date).getMonth() / 12;
-        const targetScroll = (evYear - startDecade) * pixelsPerYear;
-        if (!isDragging) {
-          stripRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
-        }
-      }
-    }, 4000);
+      scrollToIndex(nextIdx);
+    }, 4500);
     return () => clearInterval(interval);
-  }, [isPlaying, events, activeIndex, isDragging, pixelsPerYear, startDecade]);
+  }, [isPlaying, events, activeIndex, scrollToIndex, focusMode]);
 
   const ticks = [];
   for (let y = startDecade; y <= endDecade; y += 1) {
-    ticks.push({
-      val: y,
-      isDecade: Math.abs(y % 10) === 0,
-    });
+    ticks.push({ val: y, isDecade: Math.abs(y % 10) === 0 });
   }
 
-  function scrollToIndex(index: number) {
-    const ev = events[index];
-    if (ev && stripRef.current) {
-      const evYear =
-        new Date(ev.event_date).getFullYear() +
-        new Date(ev.event_date).getMonth() / 12;
-      const targetScroll = (evYear - startDecade) * pixelsPerYear;
-      // Don't override if currently dragging!
-      if (!isDragging) {
-        stripRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
-      }
-    }
-  }
-
-  // Handle Pan / Scroll logic tracking active timeline event
+  // Native Scroll Handler
   const handleScroll = () => {
-    if (!stripRef.current || events.length === 0 || isPlaying) return;
+    if (!stripRef.current || events.length === 0) return;
+    if (scrollTimeoutRef.current) {
+      window.clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Pause slideshow if manually sliding
+    setIsPlaying(false);
+
     const scrollLeft = stripRef.current.scrollLeft;
-    // The fixed red line is conceptually at scrollLeft (since we center the content using massive 50vw padding)
+    // 50vw offset means when scrollLeft is 0, startDecade is naturally at the red center line.
     const currentYear = startDecade + scrollLeft / pixelsPerYear;
 
     let closestIdx = activeIndex;
     let minDiff = Number.MAX_VALUE;
     events.forEach((ev, idx) => {
-      const evYear =
-        new Date(ev.event_date).getFullYear() +
-        new Date(ev.event_date).getMonth() / 12;
+      const date = new Date(ev.event_date);
+      const evYear = date.getFullYear() + date.getMonth() / 12;
       const diff = Math.abs(evYear - currentYear);
       if (diff < minDiff) {
         minDiff = diff;
@@ -133,27 +126,9 @@ export function TimecardDisplay() {
     if (closestIdx !== activeIndex) {
       setActiveIndex(closestIdx);
     }
-  };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (!stripRef.current) return;
-    // Prevents default behavior taking over on touch scrub
-    if (e.cancelable) e.preventDefault();
-    setIsDragging(true);
-    setIsPlaying(false);
-    setDragStartX(e.clientX);
-    setScrollStartX(stripRef.current.scrollLeft);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !stripRef.current) return;
-    const dx = e.clientX - dragStartX;
-    // Reverse movement for standard mapping feeling (push left to show right)
-    stripRef.current.scrollLeft = scrollStartX - dx;
-  };
-
-  const handlePointerUp = () => {
-    setIsDragging(false);
+    // Debounced resumption logic could go here if requested
+    scrollTimeoutRef.current = window.setTimeout(() => {}, 150);
   };
 
   if (!person) {
@@ -169,86 +144,41 @@ export function TimecardDisplay() {
   const activeEvent = events[activeIndex];
 
   return (
-    <div
-      className="bg-slate-50 min-h-screen text-slate-800 overflow-hidden flex flex-col relative w-full h-full select-none cursor-none pointer-events-auto"
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-    >
+    <div className="bg-slate-50 min-h-screen text-slate-800 overflow-hidden flex flex-col relative w-full h-full select-none cursor-none pointer-events-auto">
+      {/* Kiosk App Escape (Hidden heavily to prevent accidental touch) */}
       <button
         type="button"
         onClick={() => void invoke("close_app")}
         className="absolute top-4 left-4 z-[300] opacity-0 hover:opacity-100 transition-opacity p-2 text-slate-300 hover:text-slate-600 pointer-events-auto"
       >
-        Close
+        Close System
       </button>
 
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] opacity-[0.05] z-0 pointer-events-none"></div>
 
       {/* FIXED RED LINE AT CENTER */}
-      <div className="absolute top-[35%] bottom-[15%] left-1/2 -translate-x-1/2 w-[2px] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)] z-50 pointer-events-none">
-        <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-4 bg-red-500 rounded-full" />
-        <div className="absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-4 h-4 bg-red-500 rounded-full" />
+      {/* Now spans dramatically and confidently overlaid atop background pictures */}
+      <div className="absolute top-[25%] bottom-[15%] left-1/2 -translate-x-1/2 w-[2px] bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] z-[45] pointer-events-none transition-all">
+        <div className="absolute top-[-4px] left-1/2 -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full" />
+        <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full" />
       </div>
 
-      {/* Top Preview Section (Fades nicely out of the way when dragging) */}
-      {!focusMode && activeEvent && (
-        <div
-          className={`absolute top-[8%] w-full flex justify-center z-20 pointer-events-none transition-opacity duration-300 ${isDragging ? "opacity-30" : "opacity-100"}`}
-        >
-          <div className="flex flex-col items-center max-w-4xl transform">
-            <div
-              className="relative cursor-pointer pointer-events-auto transform transition-transform duration-300 hover:scale-[1.02] active:scale-95 group mb-6"
-              onClick={() => setFocusMode(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") setFocusMode(true);
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              <img
-                src={activeEvent.image_url}
-                alt=""
-                className="w-48 h-48 lg:w-64 lg:h-64 object-cover border-8 border-white shadow-2xl transition-all duration-700 block"
-                style={{ transform: "rotate(-1.5deg)" }}
-              />
-            </div>
-            <div className="text-center px-4">
-              <h2 className="text-xl text-slate-500 font-light italic mb-1">
-                {new Date(activeEvent.event_date).toLocaleDateString(
-                  undefined,
-                  { year: "numeric", month: "long", day: "numeric" },
-                )}
-              </h2>
-              <h3 className="text-3xl font-bold text-slate-800 leading-tight">
-                {activeEvent.title}
-              </h3>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DRAG ZONE */}
+      {/* MAC DOCK TIMELINE STRIP */}
+      {/* touch-pan-x overrides custom Javascript locks, natively sliding purely horizontal on touch screens! */}
       <div
-        className="absolute inset-x-0 top-[35%] bottom-[15%] z-40 touch-none pointer-events-auto"
-        onPointerDown={handlePointerDown}
-      />
-
-      {/* Timeline Strip */}
-      <div className="absolute top-[50%] w-full h-[35vh] z-30 pointer-events-none">
-        <div
-          ref={stripRef}
-          onScroll={handleScroll}
-          className="w-full h-full overflow-x-hidden flex items-start pointer-events-auto no-scrollbar scroll-smooth"
-        >
+        className="absolute top-[25%] w-full h-[60vh] z-30 touch-pan-x overflow-x-auto overflow-y-hidden no-scrollbar scroll-smooth snap-x snap-mandatory"
+        ref={stripRef}
+        onScroll={handleScroll}
+      >
+        <div className="h-full flex items-start w-max">
           <div className="w-[50vw] h-full flex-shrink-0" />
+
           <div
             className="relative h-full flex-shrink-0"
             style={{ width: `${(endDecade - startDecade) * pixelsPerYear}px` }}
           >
-            {/* RULER */}
-            <div className="absolute bottom-[20%] w-full h-16 pointer-events-none">
+            {/* RULER TICKS */}
+            <div className="absolute bottom-[25%] w-full h-16 pointer-events-none z-[10]">
               {ticks.map((tick) => (
                 <div
                   key={tick.val}
@@ -260,10 +190,10 @@ export function TimecardDisplay() {
                 >
                   {tick.isDecade ? (
                     <div className="flex flex-col items-center">
-                      <span className="text-lg font-bold text-slate-600 mb-2">
+                      <span className="text-xl font-bold text-slate-700 mb-2">
                         {tick.val}
                       </span>
-                      <div className="w-[2px] h-10 bg-slate-500" />
+                      <div className="w-[2px] h-12 bg-slate-500 shadow-sm" />
                     </div>
                   ) : (
                     <div className="w-[1px] h-6 bg-slate-300" />
@@ -272,25 +202,63 @@ export function TimecardDisplay() {
               ))}
             </div>
 
-            {/* PHOTOS */}
-            <div className="absolute top-0 w-full h-[60%]">
+            {/* PHOTOS (Mac Dock Engine) */}
+            <div className="absolute top-[10%] w-full h-[55%]">
               {events.map((event, i) => {
                 const date = new Date(event.event_date);
                 const year = date.getFullYear() + date.getMonth() / 12;
+                const isActive = activeIndex === i;
+
                 return (
                   <div
                     key={event.id}
-                    className={`absolute transform -translate-x-1/2 pointer-events-none transition-all duration-300 ${activeIndex === i ? "scale-110 opacity-100 z-10" : "scale-90 opacity-40 z-0"}`}
+                    className={`absolute pointer-events-none transition-all duration-[600ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                      ${
+                        isActive
+                          ? "scale-[2.8] -translate-y-[85%] translate-x-12 z-[50] shadow-[0_30px_60px_rgba(0,0,0,0.15)] opacity-100"
+                          : "scale-100 translate-y-0 -translate-x-1/2 z-[20] opacity-[0.65] blur-[1px] grayscale-[0.2]"
+                      }`}
                     style={{
                       left: `${(year - startDecade) * pixelsPerYear}px`,
-                      top: `${(i % 3) * 20}%`,
+                      top: `${(i % 4) * 20}%`,
                     }}
                   >
-                    <img
-                      src={event.image_url}
-                      className="w-20 h-20 object-cover border-4 border-white shadow-md rounded-md"
-                      alt=""
-                    />
+                    {/* The Polaroid */}
+                    <div
+                      className="relative pointer-events-auto cursor-pointer"
+                      onClick={() => setFocusMode(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ")
+                          setFocusMode(true);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <img
+                        src={event.image_url}
+                        className="w-20 h-20 object-cover border-[3px] border-white rounded shadow-sm bg-white"
+                        alt=""
+                      />
+                    </div>
+
+                    {/* Pop-out Info Card (Only visible when magnified) */}
+                    {isActive && !focusMode && (
+                      <div className="absolute top-1/2 -translate-y-1/2 left-[120%] w-[380px] bg-slate-50/95 backdrop-blur-sm p-5 border border-slate-200 rounded-xl shadow-xl scale-[0.4] origin-left pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-500 delay-150">
+                        <p className="text-[14px] uppercase tracking-widest font-bold text-red-500 mb-1 border-b border-red-100 pb-1 w-max">
+                          {date.toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </p>
+                        <h4 className="text-[28px] font-black leading-tight text-slate-800 mb-2 truncate">
+                          {event.title}
+                        </h4>
+                        <p className="text-[18px] text-slate-600 leading-relaxed line-clamp-3 font-light">
+                          {event.description}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -300,73 +268,46 @@ export function TimecardDisplay() {
         </div>
       </div>
 
-      {/* Controls & Name Plate */}
-      <div className="absolute bottom-[4%] w-full flex flex-col items-center z-50 pointer-events-none">
-        {/* Navigation & Slideshow Controls */}
-        <div className="flex gap-6 items-center mb-4 pointer-events-auto bg-slate-100/90 backdrop-blur px-6 py-2 rounded-full border border-slate-200 shadow-sm opacity-60 hover:opacity-100 transition-opacity">
+      {/* Main Screen Controls & Dashboard Plating */}
+      <div className="absolute bottom-[6%] w-full flex flex-col items-center z-[40] pointer-events-none">
+        {/* Slideshow Control */}
+        <div className="flex gap-4 items-center mb-6 pointer-events-auto bg-slate-100/90 backdrop-blur px-8 py-3 rounded-full border border-slate-200 shadow-sm transition-opacity opacity-80 hover:opacity-100">
           <button
             type="button"
-            onClick={() => setPixelsPerYear((p) => Math.max(12, p - 6))}
-            className="text-xl px-2 text-slate-500 hover:text-slate-800 transition-colors"
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="text-slate-700 hover:text-red-700 font-bold tracking-widest uppercase text-base p-2 w-32 text-center"
           >
-            −
-          </button>
-
-          <div className="flex gap-4 items-center border-l border-r border-slate-300 px-6 mx-2">
-            <button
-              type="button"
-              onClick={() => {
-                setIsPlaying(false);
-                const prev =
-                  activeIndex === 0 ? events.length - 1 : activeIndex - 1;
-                setActiveIndex(prev);
-                scrollToIndex(prev);
-              }}
-              className="text-slate-500 hover:text-slate-800 text-sm font-bold uppercase tracking-widest p-2"
-            >
-              &larr; Prev
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="text-slate-600 hover:text-red-700 font-bold tracking-widest uppercase text-sm p-2 w-20 text-center"
-            >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsPlaying(false);
-                const next = (activeIndex + 1) % events.length;
-                setActiveIndex(next);
-                scrollToIndex(next);
-              }}
-              className="text-slate-500 hover:text-slate-800 text-sm font-bold uppercase tracking-widest p-2"
-            >
-              Next &rarr;
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setPixelsPerYear((p) => Math.min(72, p + 6))}
-            className="text-xl px-2 text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            +
+            {isPlaying ? "Pause \u23F8" : "Play Slideshow \u25B6"}
           </button>
         </div>
 
-        <h1 className="text-3xl tracking-[0.3em] uppercase text-slate-800 font-bold mb-1">
+        <h1 className="text-4xl tracking-[0.3em] uppercase text-slate-800 font-bold mb-2">
           {person.name}
         </h1>
-        <p className="text-lg tracking-widest text-slate-500 italic">
-          {new Date(person.birth_date).getFullYear()} —{" "}
+        <p className="text-xl tracking-[0.2em] text-slate-400 italic">
+          {new Date(person.birth_date).getFullYear()} &bull;{" "}
           {person.dead_date === "Present"
             ? "Present"
             : new Date(person.dead_date).getFullYear()}
         </p>
+      </div>
+
+      {/* Fixed Layout Zoom Controls (Bottom Right) */}
+      <div className="absolute bottom-12 right-12 flex gap-6 text-slate-400 z-[40] pointer-events-auto font-light tracking-widest uppercase text-sm">
+        <button
+          className="hover:text-slate-800"
+          type="button"
+          onClick={() => setPixelsPerYear((p) => Math.min(120, p + 16))}
+        >
+          Zoom In
+        </button>
+        <button
+          className="hover:text-slate-800"
+          type="button"
+          onClick={() => setPixelsPerYear((p) => Math.max(24, p - 16))}
+        >
+          Zoom Out
+        </button>
       </div>
 
       {/* SPLIT SCREEN FOCUS MODE */}
@@ -375,39 +316,93 @@ export function TimecardDisplay() {
           <button
             type="button"
             onClick={() => setFocusMode(false)}
-            className="absolute top-8 right-8 text-slate-400 hover:text-slate-800 tracking-widest uppercase font-bold p-4 pointer-events-auto"
+            className="absolute top-10 right-10 text-slate-400 hover:text-red-700 tracking-widest uppercase font-bold p-4 pointer-events-auto transition-colors z-[210] border border-slate-200 rounded-full bg-white shadow-sm"
           >
             &#10005; Close
           </button>
 
-          {/* Left: Maximized Image */}
-          <div className="flex-1 flex justify-end items-center h-full max-h-[85vh] w-1/2">
-            <img
-              src={activeEvent.image_url}
-              className="w-full h-full object-contain shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-md border border-slate-100"
-              alt=""
-            />
+          {/* Left/Right Navigation Flow Arrows */}
+          <button
+            type="button"
+            onClick={() =>
+              scrollToIndex(
+                activeIndex === 0 ? events.length - 1 : activeIndex - 1,
+              )
+            }
+            className="absolute left-8 lg:left-14 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 hover:bg-slate-200/50 p-6 rounded-xl transition-all z-[210]"
+          >
+            <svg
+              role="img"
+              aria-label="Previous"
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>Previous</title>
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollToIndex((activeIndex + 1) % events.length)}
+            className="absolute right-8 lg:right-14 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 hover:bg-slate-200/50 p-6 rounded-xl transition-all z-[210]"
+          >
+            <svg
+              role="img"
+              aria-label="Next"
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>Next</title>
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+
+          {/* Central Left Content: The Framed Photo */}
+          <div className="flex-1 flex flex-col justify-center items-center h-full max-h-[85vh] w-1/2 ml-20 relative">
+            <div className="p-4 bg-white border border-[#d1d5db] shadow-[0_4px_16px_rgba(0,0,0,0.08),0_inset_0_2px_4px_rgba(255,255,255,0.5)]">
+              <img
+                src={activeEvent.image_url}
+                className="w-full object-contain max-h-[65vh] shadow-[inset_0_2px_8px_rgba(0,0,0,0.1)] border border-slate-200"
+                alt=""
+              />
+            </div>
+            {/* Small Title | Date Plate directly under the image per mockup */}
+            <div className="mt-8 text-center px-12 border-b border-slate-200 pb-6 min-w-[60%]">
+              <span className="text-xl lg:text-2xl font-light tracking-wide text-slate-700">
+                {activeEvent.title}
+              </span>
+              <span className="mx-4 lg:mx-6 text-slate-300">|</span>
+              <span className="text-xl lg:text-2xl font-bold tracking-widest text-slate-500">
+                {new Date(activeEvent.event_date).toLocaleDateString(
+                  undefined,
+                  { year: "numeric", month: "long", day: "numeric" },
+                )}
+              </span>
+            </div>
           </div>
 
-          {/* Right: Details Formatted Nice and Large */}
-          <div className="flex-1 flex flex-col justify-center max-w-2xl text-left border-l border-slate-200 pl-12 h-full max-h-[85vh] w-1/2">
-            <h2 className="text-3xl md:text-4xl text-slate-400 italic mb-6">
-              {new Date(activeEvent.event_date).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </h2>
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-800 leading-none mb-10 tracking-tight">
-              {activeEvent.title}
-            </h1>
-            <p className="text-2xl md:text-3xl text-slate-600 leading-relaxed font-light line-clamp-6">
+          {/* Right Content: Deep Description and Vast Data */}
+          <div className="flex-1 flex flex-col justify-center max-w-2xl text-left pl-8 h-full max-h-[85vh] w-1/2 mr-20 z-[205]">
+            <p className="text-2xl md:text-3xl text-slate-600 leading-[1.8] font-light font-serif">
               {activeEvent.description}
             </p>
           </div>
 
-          {/* Persistent Nameplate faintly in the background/bottom */}
-          <h1 className="absolute bottom-4 left-1/2 -translate-x-1/2 text-2xl tracking-[0.4em] uppercase text-slate-300 font-bold opacity-50 z-0">
+          {/* Persistent Nameplate at the stark bottom exactly per Mockup */}
+          <h1 className="absolute bottom-8 left-1/2 -translate-x-1/2 text-3xl tracking-[0.5em] uppercase text-slate-800 font-bold z-[205]">
             {person.name}
           </h1>
         </div>
