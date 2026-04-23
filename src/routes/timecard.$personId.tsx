@@ -346,7 +346,7 @@ export function TimecardDisplay() {
 
       {/* FOCUS MODAL Overlay Native Structure */}
       {focusMode && activeEvent && (
-        <div className="fixed inset-0 bg-slate-50/95 backdrop-blur-xl z-[200] cursor-none relative pointer-events-auto animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-50/95 backdrop-blur-xl z-[200] cursor-none pointer-events-auto animate-in fade-in duration-300">
           <button
             type="button"
             onClick={() => {
