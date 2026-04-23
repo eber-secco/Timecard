@@ -30,6 +30,7 @@ export function TimecardDisplay() {
 
   const stripRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
+  const isSlideshowDrivingRef = useRef<boolean>(false);
 
   useEffect(() => {
     const fetchPersonAndEvents = () => {
@@ -67,24 +68,20 @@ export function TimecardDisplay() {
   const birthYear = person?.birth_date
     ? parseInt(person.birth_date.substring(0, 4), 10)
     : 1970;
-  const startDecade = Math.floor(birthYear / 10) * 10 - 10;
-  const endDecade = Math.ceil(new Date().getFullYear() / 10) * 10 + 10;
+  const deadYear =
+    person?.dead_date && person.dead_date !== "Present"
+      ? parseInt(person.dead_date.substring(0, 4), 10)
+      : new Date().getFullYear();
 
-  // Render Engine: Calculate Physical Geometry & Gap Spacing guarantees (Artifact 7/8 Fix)
+  const startDecade = birthYear;
+  const endDecade = deadYear;
+
+  // Render Engine: Exact Spatial Overlap without artificial spacing limits
   const renderedEvents = useMemo(() => {
-    let lastX = -9999;
-    const MINIMUM_GAP = 45; // Ensures no photo ever perfectly overlays another
-
     return events.map((event, i) => {
       const date = new Date(event.event_date);
       const year = date.getFullYear() + date.getMonth() / 12;
-
-      let targetX = (year - startDecade) * pixelsPerYear;
-      if (targetX < lastX + MINIMUM_GAP) {
-        targetX = lastX + MINIMUM_GAP;
-      }
-
-      lastX = targetX;
+      const targetX = (year - startDecade) * pixelsPerYear;
       return {
         ...event,
         renderX: targetX,
@@ -95,22 +92,34 @@ export function TimecardDisplay() {
   }, [events, startDecade, pixelsPerYear]);
 
   const scrollToIndex = useCallback(
-    (index: number) => {
+    (index: number, isSlideshow = false) => {
       setActiveExpandedId(null);
+
+      if (isSlideshow) {
+        isSlideshowDrivingRef.current = true;
+        setActiveIndex(index);
+      }
+
       const ev = renderedEvents[index];
       if (ev && stripRef.current) {
         stripRef.current.scrollTo({ left: ev.renderX, behavior: "smooth" });
+
+        if (isSlideshow) {
+          window.setTimeout(() => {
+            isSlideshowDrivingRef.current = false;
+          }, 850);
+        }
       }
     },
     [renderedEvents],
   );
 
-  // Global Slideshow Interval (Now ignores focusMode entirely!)
+  // Global Slideshow Interval (Functions purely on active indexing traversing overlapping identical pixel spots safely)
   useEffect(() => {
     if (!isPlaying || renderedEvents.length === 0) return;
     const interval = setInterval(() => {
       const nextIdx = (activeIndex + 1) % renderedEvents.length;
-      scrollToIndex(nextIdx);
+      scrollToIndex(nextIdx, true); // Identifies as automated slideshow trigger
     }, 4500);
     return () => clearInterval(interval);
   }, [isPlaying, renderedEvents, activeIndex, scrollToIndex]);
@@ -133,25 +142,26 @@ export function TimecardDisplay() {
       window.clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Collapse any opened menu items during drag coasting
-    setActiveExpandedId(null);
-    setIsPlaying(false);
+    // Completely ignore calculating physics overlaps if slideshow is running to prevent recursion breaks
+    if (!isSlideshowDrivingRef.current) {
+      setActiveExpandedId(null);
+      setIsPlaying(false);
 
-    const scrollLeft = stripRef.current.scrollLeft;
+      const scrollLeft = stripRef.current.scrollLeft;
 
-    let closestIdx = activeIndex;
-    let minDiff = Number.MAX_VALUE;
-    renderedEvents.forEach((ev, idx) => {
-      // Find whichever photo rendered position is closest to the physical scroll zero-bound (line)
-      const diff = Math.abs(ev.renderX - scrollLeft);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIdx = idx;
+      let closestIdx = activeIndex;
+      let minDiff = Number.MAX_VALUE;
+      renderedEvents.forEach((ev, idx) => {
+        const diff = Math.abs(ev.renderX - scrollLeft);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = idx;
+        }
+      });
+
+      if (closestIdx !== activeIndex) {
+        setActiveIndex(closestIdx);
       }
-    });
-
-    if (closestIdx !== activeIndex) {
-      setActiveIndex(closestIdx);
     }
 
     scrollTimeoutRef.current = window.setTimeout(() => {}, 150);
@@ -159,7 +169,7 @@ export function TimecardDisplay() {
 
   if (!person) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-serif cursor-none *:-cursor-none">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-serif cursor-none *:-cursor-none touch-none overflow-hidden overscroll-none">
         <h1 className="text-3xl text-slate-400 animate-pulse uppercase tracking-[0.2em] font-light">
           Initializing Timecard...
         </h1>
@@ -170,8 +180,7 @@ export function TimecardDisplay() {
   const activeEvent = renderedEvents[activeIndex];
 
   return (
-    <div className="bg-slate-50 min-h-screen text-slate-800 overflow-hidden flex flex-col relative w-full h-full select-none cursor-none pointer-events-auto">
-      {/* Dev Close System */}
+    <div className="bg-slate-50 min-h-screen text-slate-800 overflow-hidden flex flex-col relative w-full h-full select-none cursor-none pointer-events-auto touch-none overscroll-none">
       <button
         type="button"
         onClick={() => void invoke("close_app")}
@@ -182,8 +191,10 @@ export function TimecardDisplay() {
 
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] opacity-[0.05] z-0 pointer-events-none"></div>
 
-      {/* SHORTER OVERLAY RED LINE */}
-      <div className="absolute top-[35%] bottom-[25%] left-1/2 -translate-x-1/2 w-[2px] bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] z-[45] pointer-events-none transition-all">
+      {/* EXTENDED OVERLAY RED LINE - Fades completely out if Stage 2 (Expanded) or Focus Mode is operating */}
+      <div
+        className={`absolute top-[25%] bottom-[15%] left-1/2 -translate-x-1/2 w-[2px] bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] z-[45] pointer-events-none transition-opacity duration-300 ${activeExpandedId !== null || focusMode ? "opacity-0" : "opacity-100"}`}
+      >
         <div className="absolute top-[-4px] left-1/2 -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full" />
         <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full" />
       </div>
@@ -197,7 +208,6 @@ export function TimecardDisplay() {
         <div className="h-full flex items-start w-max relative">
           <div className="w-[50vw] h-full flex-shrink-0" />
 
-          {/* Main Track Dimension computed from final rendered point + buffer padding */}
           <div
             className="relative h-full flex-shrink-0"
             style={{
@@ -240,21 +250,19 @@ export function TimecardDisplay() {
                   className={`absolute pointer-events-none transition-all duration-[600ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
                     ${
                       isActive && isExpanded
-                        ? // Active Tap Expanded
+                        ? // Active Tap Expanded (STAGE 2)
                           "scale-[2.8] -translate-y-24 -translate-x-[45%] z-[60] shadow-[0_30px_60px_rgba(0,0,0,0.15)] opacity-100"
                         : isActive && !isExpanded
-                          ? // Active Hover Center Pop
+                          ? // Active Hover Center Pop (STAGE 1)
                             "scale-[2.6] -translate-y-[4.5rem] translate-x-[15%] z-[50] shadow-2xl opacity-100"
                           : // Compressed Background State strictly above ticks
                             "scale-100 translate-y-0 -translate-x-1/2 z-[20] opacity-[0.8]"
                     }`}
                   style={{
                     left: `${event.renderX}px`,
-                    // Tightly mapped between 40% an 70% height to flawlessly fit above bottom-28% ruler
                     top: `${(i % 3) * 15 + 40}%`,
                   }}
                 >
-                  {/* Photo Interaction Frame */}
                   <div
                     className="relative pointer-events-auto cursor-none outline-none"
                     onClick={() => {
@@ -262,7 +270,7 @@ export function TimecardDisplay() {
                         if (!isExpanded) setActiveExpandedId(event.id);
                         else setFocusMode(true);
                       } else {
-                        scrollToIndex(i);
+                        scrollToIndex(i, false);
                       }
                     }}
                     onKeyDown={(e) => {
@@ -275,7 +283,6 @@ export function TimecardDisplay() {
                     role="button"
                     tabIndex={0}
                   >
-                    {/* Note: blur has been officially stripped cleanly via User Order */}
                     <img
                       src={event.image_url}
                       className="w-20 h-20 object-cover border-[3px] border-white rounded shadow-sm bg-white"
@@ -283,7 +290,7 @@ export function TimecardDisplay() {
                     />
                   </div>
 
-                  {/* Stage Hover Text Wrapper */}
+                  {/* Stage Hover Text Wrapper (STAGE 2 TEXT) */}
                   {isActive && isExpanded && !focusMode && (
                     <div className="absolute top-1/2 -translate-y-1/2 left-[110%] w-[450px] bg-slate-50/95 backdrop-blur-sm p-4 border border-slate-200 shadow-xl scale-[0.4] origin-left pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-500 cursor-none">
                       <p className="text-[12px] uppercase tracking-widest font-bold text-red-500 mb-1 border-b border-red-100 pb-1 w-max">
@@ -310,7 +317,6 @@ export function TimecardDisplay() {
         </div>
       </div>
 
-      {/* Primary Interface Elements Base Overlay */}
       <div className="absolute bottom-[4%] w-full flex flex-col items-center z-[40] pointer-events-none">
         <h1 className="text-4xl tracking-[0.3em] uppercase text-slate-800 font-bold mb-2">
           {person.name}
@@ -323,7 +329,6 @@ export function TimecardDisplay() {
         </p>
       </div>
 
-      {/* Explicit Fixed Text Zooming Actions */}
       <div className="absolute bottom-[4%] right-12 flex gap-8 text-slate-400 z-[50] pointer-events-auto font-light tracking-widest uppercase text-[12px] cursor-none tracking-widest">
         <button
           type="button"
@@ -352,9 +357,9 @@ export function TimecardDisplay() {
         </button>
       </div>
 
-      {/* FULLSCREEN FOCUS OVERLAY */}
+      {/* FULLSCREEN FOCUS OVERLAY (STAGE 3) */}
       {focusMode && activeEvent && (
-        <div className="fixed inset-0 bg-slate-50 z-[200] cursor-none relative pointer-events-auto">
+        <div className="fixed inset-0 bg-slate-50/95 backdrop-blur-xl z-[200] cursor-none relative pointer-events-auto animate-in fade-in duration-300">
           {/* Subtle Flat Text Close Function */}
           <button
             type="button"
@@ -364,12 +369,13 @@ export function TimecardDisplay() {
             &#10005; Close
           </button>
 
-          {/* Extreme Left Navigation Overlay (Arrow Title Tags stripped for tooltip error resolution) */}
+          {/* Extreme Left Navigation Overlay */}
           <button
             type="button"
             onClick={() =>
               scrollToIndex(
                 activeIndex === 0 ? renderedEvents.length - 1 : activeIndex - 1,
+                false,
               )
             }
             className="absolute left-6 lg:left-10 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 p-4 transition-all z-[210] cursor-none"
@@ -393,7 +399,7 @@ export function TimecardDisplay() {
           <button
             type="button"
             onClick={() =>
-              scrollToIndex((activeIndex + 1) % renderedEvents.length)
+              scrollToIndex((activeIndex + 1) % renderedEvents.length, false)
             }
             className="absolute right-6 lg:right-10 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 p-4 transition-all z-[210] cursor-none"
           >
