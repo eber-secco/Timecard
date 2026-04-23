@@ -41,7 +41,7 @@ export const Connect: React.FC = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 pb-20 font-serif flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-slate-50 p-8 pb-20 font-serif flex flex-col items-center justify-center cursor-none *:-cursor-none">
       <header className="mb-12 w-full flex flex-col items-center max-w-3xl">
         <h1 className="text-4xl md:text-6xl text-center font-black text-slate-800 mb-8 tracking-tight">
           Timecard

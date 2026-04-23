@@ -9,7 +9,7 @@ export const Home: React.FC = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center cursor-none *:-cursor-none">
       <div className="animate-pulse text-cyan-600 font-bold text-xl">
         Loading Timecard...
       </div>

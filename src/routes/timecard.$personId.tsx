@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TimelineEvent } from "../components/TimelineItem";
 
 export const Route = createFileRoute("/timecard/$personId")({
@@ -33,7 +33,7 @@ export function TimecardDisplay() {
 
   useEffect(() => {
     const fetchPersonAndEvents = () => {
-      // 1. Sync active person state
+      // Sync active person state
       void invoke<Person | null>("get_current_display_state")
         .then((data) => {
           if (!data) return;
@@ -44,7 +44,7 @@ export function TimecardDisplay() {
         })
         .catch(console.error);
 
-      // 2. Fetch Events
+      // Fetch Events
       void invoke<TimelineEvent[]>("get_events", {
         personId: parseInt(personId, 10),
       })
@@ -70,55 +70,80 @@ export function TimecardDisplay() {
   const startDecade = Math.floor(birthYear / 10) * 10 - 10;
   const endDecade = Math.ceil(new Date().getFullYear() / 10) * 10 + 10;
 
+  // Render Engine: Calculate Physical Geometry & Gap Spacing guarantees (Artifact 7/8 Fix)
+  const renderedEvents = useMemo(() => {
+    let lastX = -9999;
+    const MINIMUM_GAP = 45; // Ensures no photo ever perfectly overlays another
+
+    return events.map((event, i) => {
+      const date = new Date(event.event_date);
+      const year = date.getFullYear() + date.getMonth() / 12;
+
+      let targetX = (year - startDecade) * pixelsPerYear;
+      if (targetX < lastX + MINIMUM_GAP) {
+        targetX = lastX + MINIMUM_GAP;
+      }
+
+      lastX = targetX;
+      return {
+        ...event,
+        renderX: targetX,
+        originalIndex: i,
+        dateObj: date,
+      };
+    });
+  }, [events, startDecade, pixelsPerYear]);
+
   const scrollToIndex = useCallback(
     (index: number) => {
       setActiveExpandedId(null);
-      const ev = events[index];
+      const ev = renderedEvents[index];
       if (ev && stripRef.current) {
-        const date = new Date(ev.event_date);
-        const evYear = date.getFullYear() + date.getMonth() / 12;
-        const targetScroll = (evYear - startDecade) * pixelsPerYear;
-        stripRef.current.scrollTo({ left: targetScroll, behavior: "smooth" });
+        stripRef.current.scrollTo({ left: ev.renderX, behavior: "smooth" });
       }
     },
-    [events, startDecade, pixelsPerYear],
+    [renderedEvents],
   );
 
-  // Slideshow interval
+  // Global Slideshow Interval (Now ignores focusMode entirely!)
   useEffect(() => {
-    if (!isPlaying || events.length === 0 || focusMode) return;
+    if (!isPlaying || renderedEvents.length === 0) return;
     const interval = setInterval(() => {
-      const nextIdx = (activeIndex + 1) % events.length;
+      const nextIdx = (activeIndex + 1) % renderedEvents.length;
       scrollToIndex(nextIdx);
     }, 4500);
     return () => clearInterval(interval);
-  }, [isPlaying, events, activeIndex, scrollToIndex, focusMode]);
+  }, [isPlaying, renderedEvents, activeIndex, scrollToIndex]);
 
+  // Tick generator logic scales dynamically into 5-year leaps at extensive zoom
   const ticks = [];
+  const tickInterval = pixelsPerYear >= 60 ? 5 : 10;
   for (let y = startDecade; y <= endDecade; y += 1) {
-    ticks.push({ val: y, isDecade: Math.abs(y % 10) === 0 });
+    if (Math.abs(y % tickInterval) === 0) {
+      ticks.push({ val: y, isMajor: true });
+    } else {
+      ticks.push({ val: y, isMajor: false });
+    }
   }
 
-  // Native Scroll Handler
+  // Native Scroll Hooking directly to mapped rendering coordinates
   const handleScroll = () => {
-    if (!stripRef.current || events.length === 0) return;
+    if (!stripRef.current || renderedEvents.length === 0) return;
     if (scrollTimeoutRef.current) {
       window.clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Auto collapse expansion if user manually scrolls the timeline
+    // Collapse any opened menu items during drag coasting
     setActiveExpandedId(null);
     setIsPlaying(false);
 
     const scrollLeft = stripRef.current.scrollLeft;
-    const currentYear = startDecade + scrollLeft / pixelsPerYear;
 
     let closestIdx = activeIndex;
     let minDiff = Number.MAX_VALUE;
-    events.forEach((ev, idx) => {
-      const date = new Date(ev.event_date);
-      const evYear = date.getFullYear() + date.getMonth() / 12;
-      const diff = Math.abs(evYear - currentYear);
+    renderedEvents.forEach((ev, idx) => {
+      // Find whichever photo rendered position is closest to the physical scroll zero-bound (line)
+      const diff = Math.abs(ev.renderX - scrollLeft);
       if (diff < minDiff) {
         minDiff = diff;
         closestIdx = idx;
@@ -132,7 +157,6 @@ export function TimecardDisplay() {
     scrollTimeoutRef.current = window.setTimeout(() => {}, 150);
   };
 
-  // Ensure ALL cursor attributes are stripped off globally
   if (!person) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-serif cursor-none *:-cursor-none">
@@ -143,11 +167,11 @@ export function TimecardDisplay() {
     );
   }
 
-  const activeEvent = events[activeIndex];
+  const activeEvent = renderedEvents[activeIndex];
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 overflow-hidden flex flex-col relative w-full h-full select-none cursor-none pointer-events-auto">
-      {/* Kiosk App Escape */}
+      {/* Dev Close System */}
       <button
         type="button"
         onClick={() => void invoke("close_app")}
@@ -158,26 +182,29 @@ export function TimecardDisplay() {
 
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] opacity-[0.05] z-0 pointer-events-none"></div>
 
-      {/* SHORTER RED LINE AT CENTER */}
+      {/* SHORTER OVERLAY RED LINE */}
       <div className="absolute top-[35%] bottom-[25%] left-1/2 -translate-x-1/2 w-[2px] bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] z-[45] pointer-events-none transition-all">
         <div className="absolute top-[-4px] left-1/2 -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full" />
         <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full" />
       </div>
 
-      {/* FULL HEIGHT TIMELINE STRIP (Prevents Vertical Clipping completely!) */}
+      {/* FULL IMMERSIVE SCROLLING WRAPPER */}
       <div
         className="absolute inset-0 z-30 touch-pan-x overflow-x-auto overflow-y-hidden no-scrollbar scroll-smooth snap-x snap-mandatory"
         ref={stripRef}
         onScroll={handleScroll}
       >
-        <div className="h-full flex items-start w-max">
+        <div className="h-full flex items-start w-max relative">
           <div className="w-[50vw] h-full flex-shrink-0" />
 
+          {/* Main Track Dimension computed from final rendered point + buffer padding */}
           <div
             className="relative h-full flex-shrink-0"
-            style={{ width: `${(endDecade - startDecade) * pixelsPerYear}px` }}
+            style={{
+              width: `${(renderedEvents[renderedEvents.length - 1]?.renderX || (endDecade - startDecade) * pixelsPerYear) + 300}px`,
+            }}
           >
-            {/* RULER TICKS (Shifted low) */}
+            {/* RULER TICKS */}
             <div className="absolute bottom-[28%] w-full h-12 pointer-events-none z-[10]">
               {ticks.map((tick) => (
                 <div
@@ -188,7 +215,7 @@ export function TimecardDisplay() {
                     transform: "translateX(-50%)",
                   }}
                 >
-                  {tick.isDecade ? (
+                  {tick.isMajor ? (
                     <div className="flex flex-col items-center">
                       <span className="text-xl font-bold text-slate-700 mb-2">
                         {tick.val}
@@ -202,94 +229,89 @@ export function TimecardDisplay() {
               ))}
             </div>
 
-            {/* PHOTOS (Dense layer at the bottom, translating safely UP into the vast whitespace above) */}
-            <div className="absolute top-[45%] w-full h-[30%]">
-              {events.map((event, i) => {
-                const date = new Date(event.event_date);
-                const year = date.getFullYear() + date.getMonth() / 12;
-                const isActive = activeIndex === i;
-                const isExpanded = activeExpandedId === event.id;
+            {/* PHOTOS */}
+            {renderedEvents.map((event, i) => {
+              const isActive = activeIndex === i;
+              const isExpanded = activeExpandedId === event.id;
 
-                return (
+              return (
+                <div
+                  key={event.id}
+                  className={`absolute pointer-events-none transition-all duration-[600ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                    ${
+                      isActive && isExpanded
+                        ? // Active Tap Expanded
+                          "scale-[2.8] -translate-y-24 -translate-x-[45%] z-[60] shadow-[0_30px_60px_rgba(0,0,0,0.15)] opacity-100"
+                        : isActive && !isExpanded
+                          ? // Active Hover Center Pop
+                            "scale-[2.6] -translate-y-[4.5rem] translate-x-[15%] z-[50] shadow-2xl opacity-100"
+                          : // Compressed Background State strictly above ticks
+                            "scale-100 translate-y-0 -translate-x-1/2 z-[20] opacity-[0.8]"
+                    }`}
+                  style={{
+                    left: `${event.renderX}px`,
+                    // Tightly mapped between 40% an 70% height to flawlessly fit above bottom-28% ruler
+                    top: `${(i % 3) * 15 + 40}%`,
+                  }}
+                >
+                  {/* Photo Interaction Frame */}
                   <div
-                    key={event.id}
-                    className={`absolute pointer-events-none transition-all duration-[600ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                      ${
-                        isActive && isExpanded
-                          ? // Tap 1: Shift Left of center, massive text spawns right
-                            "scale-[2.8] -translate-y-24 -translate-x-[45%] z-[60] shadow-[0_30px_60px_rgba(0,0,0,0.15)] opacity-100"
-                          : isActive && !isExpanded
-                            ? // Hover: Shift precisely to the Right of the center red line
-                              "scale-[2.6] -translate-y-[4.5rem] translate-x-[15%] z-[50] shadow-2xl opacity-100"
-                            : // Background: Tiny and muted
-                              "scale-100 translate-y-0 -translate-x-1/2 z-[20] opacity-[0.6] blur-[2px] grayscale-[0.2]"
-                      }`}
-                    style={{
-                      left: `${(year - startDecade) * pixelsPerYear}px`,
-                      top: `${(i % 5) * 20}%`,
+                    className="relative pointer-events-auto cursor-none outline-none"
+                    onClick={() => {
+                      if (isActive) {
+                        if (!isExpanded) setActiveExpandedId(event.id);
+                        else setFocusMode(true);
+                      } else {
+                        scrollToIndex(i);
+                      }
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if (isActive && !isExpanded)
+                          setActiveExpandedId(event.id);
+                        else if (isActive && isExpanded) setFocusMode(true);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
-                    {/* The Polaroid -> Note: Custom Click Logic for Multi-Stage Unloading! */}
-                    <div
-                      className="relative pointer-events-auto cursor-none outline-none"
-                      onClick={() => {
-                        if (isActive) {
-                          if (!isExpanded) {
-                            setActiveExpandedId(event.id);
-                          } else {
-                            setFocusMode(true);
-                          }
-                        } else {
-                          scrollToIndex(i);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          if (isActive && !isExpanded)
-                            setActiveExpandedId(event.id);
-                          else if (isActive && isExpanded) setFocusMode(true);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <img
-                        src={event.image_url}
-                        className="w-20 h-20 object-cover border-[3px] border-white rounded shadow-sm bg-white"
-                        alt=""
-                      />
-                    </div>
-
-                    {/* Stage 1 Expanded Details Box (slides out to the right) */}
-                    {isActive && isExpanded && !focusMode && (
-                      <div className="absolute top-1/2 -translate-y-1/2 left-[110%] w-[450px] bg-slate-50/95 backdrop-blur-sm p-4 border border-slate-200 shadow-xl scale-[0.4] origin-left pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-500 cursor-none">
-                        <p className="text-[12px] uppercase tracking-widest font-bold text-red-500 mb-1 border-b border-red-100 pb-1 w-max">
-                          {date.toLocaleDateString(undefined, {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
-                        </p>
-                        <h4 className="text-[28px] font-black leading-tight text-slate-800 mb-2 truncate font-sans tracking-tight">
-                          {event.title}
-                        </h4>
-                        <p className="text-[20px] text-slate-600 leading-relaxed font-serif line-clamp-3">
-                          {event.description}
-                        </p>
-                      </div>
-                    )}
+                    {/* Note: blur has been officially stripped cleanly via User Order */}
+                    <img
+                      src={event.image_url}
+                      className="w-20 h-20 object-cover border-[3px] border-white rounded shadow-sm bg-white"
+                      alt=""
+                    />
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Stage Hover Text Wrapper */}
+                  {isActive && isExpanded && !focusMode && (
+                    <div className="absolute top-1/2 -translate-y-1/2 left-[110%] w-[450px] bg-slate-50/95 backdrop-blur-sm p-4 border border-slate-200 shadow-xl scale-[0.4] origin-left pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-500 cursor-none">
+                      <p className="text-[12px] uppercase tracking-widest font-bold text-red-500 mb-1 border-b border-red-100 pb-1 w-max">
+                        {event.dateObj.toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </p>
+                      <h4 className="text-[28px] font-black leading-tight text-slate-800 mb-2 truncate font-sans tracking-tight">
+                        {event.title}
+                      </h4>
+                      <p className="text-[20px] text-slate-600 leading-relaxed font-serif line-clamp-3">
+                        {event.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
+
           <div className="w-[50vw] h-full flex-shrink-0" />
         </div>
       </div>
 
-      {/* Main Screen Info Text */}
+      {/* Primary Interface Elements Base Overlay */}
       <div className="absolute bottom-[4%] w-full flex flex-col items-center z-[40] pointer-events-none">
-        {/* Name Plate at very bottom center */}
         <h1 className="text-4xl tracking-[0.3em] uppercase text-slate-800 font-bold mb-2">
           {person.name}
         </h1>
@@ -301,7 +323,7 @@ export function TimecardDisplay() {
         </p>
       </div>
 
-      {/* Fixed Layout Controls -> Strictly Text Links as requested */}
+      {/* Explicit Fixed Text Zooming Actions */}
       <div className="absolute bottom-[4%] right-12 flex gap-8 text-slate-400 z-[50] pointer-events-auto font-light tracking-widest uppercase text-[12px] cursor-none tracking-widest">
         <button
           type="button"
@@ -319,21 +341,21 @@ export function TimecardDisplay() {
         </button>
       </div>
 
-      {/* Fixed Layout Left Slideshow Control */}
+      {/* Explicit Slideshow Toggle */}
       <div className="absolute bottom-[4%] left-12 text-slate-400 z-[50] pointer-events-auto font-light uppercase text-[12px] cursor-none tracking-widest">
         <button
           type="button"
           className="hover:text-red-700 cursor-none transition-colors"
           onClick={() => setIsPlaying(!isPlaying)}
         >
-          {isPlaying ? "Pause" : "Play Slideshow"}
+          {isPlaying ? "PAUSE" : "SLIDESHOW"}
         </button>
       </div>
 
-      {/* SPLIT SCREEN FOCUS MODE -> Deep Layout Replication */}
+      {/* FULLSCREEN FOCUS OVERLAY */}
       {focusMode && activeEvent && (
-        <div className="fixed inset-0 bg-slate-50 z-[200] flex flex-row items-center justify-center p-8 lg:p-24 animate-in fade-in duration-500 cursor-none relative pointer-events-auto">
-          {/* Subtle Text Close Button Extracted top right */}
+        <div className="fixed inset-0 bg-slate-50 z-[200] cursor-none relative pointer-events-auto">
+          {/* Subtle Flat Text Close Function */}
           <button
             type="button"
             onClick={() => setFocusMode(false)}
@@ -342,17 +364,17 @@ export function TimecardDisplay() {
             &#10005; Close
           </button>
 
-          {/* Left/Right Navigation Flow Arrows on immense edges */}
+          {/* Extreme Left Navigation Overlay (Arrow Title Tags stripped for tooltip error resolution) */}
           <button
             type="button"
             onClick={() =>
               scrollToIndex(
-                activeIndex === 0 ? events.length - 1 : activeIndex - 1,
+                activeIndex === 0 ? renderedEvents.length - 1 : activeIndex - 1,
               )
             }
             className="absolute left-6 lg:left-10 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 p-4 transition-all z-[210] cursor-none"
-            aria-label="Previous"
           >
+            {/* biome-ignore lint/a11y/noSvgWithoutTitle: Native tooltips cause errors on kiosk */}
             <svg
               width="48"
               height="48"
@@ -363,17 +385,19 @@ export function TimecardDisplay() {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <title>Previous</title>
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
           </button>
 
+          {/* Extreme Right Navigation Overlay */}
           <button
             type="button"
-            onClick={() => scrollToIndex((activeIndex + 1) % events.length)}
+            onClick={() =>
+              scrollToIndex((activeIndex + 1) % renderedEvents.length)
+            }
             className="absolute right-6 lg:right-10 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 p-4 transition-all z-[210] cursor-none"
-            aria-label="Next"
           >
+            {/* biome-ignore lint/a11y/noSvgWithoutTitle: Native tooltips cause errors on kiosk */}
             <svg
               width="48"
               height="48"
@@ -384,41 +408,38 @@ export function TimecardDisplay() {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <title>Next</title>
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
           </button>
 
-          {/* CENTRAL LEFT: The Photo */}
-          <div className="flex-1 flex flex-col justify-center items-center h-full max-h-[85vh] w-1/2 ml-20 relative">
-            <div className="p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md">
-              <img
-                src={activeEvent.image_url}
-                className="w-full object-contain max-h-[70vh] border border-[#d1d5db]"
-                alt=""
-              />
-            </div>
+          {/* FOCAL IMMERSION (Dead Exact Center Layout mapped natively) */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[205] flex items-center justify-center p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-[65vw]">
+            <img
+              src={activeEvent.image_url}
+              className="w-auto h-auto max-h-[70vh] border border-[#d1d5db]"
+              alt=""
+            />
           </div>
 
-          {/* RIGHT CONTENT: Deep Description isolated cleanly */}
-          <div className="flex-1 flex flex-col justify-center max-w-2xl text-left pl-14 lg:pl-20 h-full max-h-[85vh] w-1/2 mr-20 z-[205]">
-            <h1 className="text-[52px] lg:text-[64px] font-bold text-slate-800 leading-[1.1] mb-4 font-sans tracking-tight">
+          {/* ASYMETTRIC RIGHT INFO DOCK */}
+          <div className="absolute right-12 lg:right-24 top-1/2 -translate-y-1/2 flex flex-col justify-center text-left z-[210] max-w-sm lg:max-w-md bg-white/70 backdrop-blur-sm p-8 rounded border border-slate-100 shadow-xl">
+            <h1 className="text-3xl lg:text-4xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
               {activeEvent.title}
             </h1>
-            <h2 className="text-2xl text-slate-400 italic mb-10 tracking-widest font-serif">
-              {new Date(activeEvent.event_date).toLocaleDateString(undefined, {
+            <h2 className="text-xl text-slate-500 italic mb-6 tracking-widest font-serif">
+              {activeEvent.dateObj.toLocaleDateString(undefined, {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               })}
             </h2>
-            <p className="text-[22px] lg:text-[28px] text-slate-600 leading-[1.65] font-light font-serif">
+            <p className="text-[17px] lg:text-[20px] text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
               {activeEvent.description}
             </p>
           </div>
 
-          {/* Persistent Nameplate replicated strictly at the very bottom strictly */}
-          <div className="absolute bottom-8 lg:bottom-[4%] w-full flex flex-col items-center pointer-events-none z-[100]">
+          {/* LOWER NAME AND DATE REPLICA */}
+          <div className="absolute bottom-[4%] w-full flex flex-col items-center pointer-events-none z-[100]">
             <h1 className="text-3xl lg:text-4xl tracking-[0.4em] uppercase text-slate-800 font-bold mb-2">
               {person.name}
             </h1>
