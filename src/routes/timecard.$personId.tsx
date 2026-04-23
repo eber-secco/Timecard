@@ -187,7 +187,7 @@ export function TimecardDisplay() {
   const activeEvent = renderedEvents[activeIndex];
 
   return (
-    <div className="fixed inset-0 bg-slate-50 text-slate-800 overflow-hidden flex flex-col relative w-full h-full select-none cursor-none pointer-events-auto touch-none overscroll-none">
+    <div className="fixed inset-0 bg-slate-50 text-slate-800 overflow-hidden flex flex-col select-none cursor-none pointer-events-auto touch-none overscroll-none">
       {/* OVERLAY RED LINE - Dynamically hidden perfectly natively when inspecting items */}
       <div
         className={`absolute top-[25%] bottom-[15%] left-1/2 -translate-x-1/2 w-[2px] bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] z-[45] pointer-events-none transition-opacity duration-300 ${activeExpandedId !== null || focusMode ? "opacity-0" : "opacity-100"}`}
