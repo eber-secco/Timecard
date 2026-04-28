@@ -74,19 +74,27 @@ export function TimecardDisplay() {
   const startDecade = birthYear;
   const endDecade = deadYear;
 
-  // RENDER ENGINE: Mathematically pure mapping mapping photos purely to dates (Permits exact physical overapping)
+  // Zoom Compaction Guard: mathematically enforces timeline spreads dynamically tracking the Name's footprint horizontally.
+  const minPixels = Math.max(
+    12,
+    Math.floor(800 / (endDecade - startDecade + 1)),
+  );
+
+  // RENDER ENGINE: Mathematically pure mapping photos purely to dates + Filter out broken DB artifacts natively!
   const renderedEvents = useMemo(() => {
-    return events.map((event, i) => {
-      const date = new Date(event.event_date);
-      const year = date.getFullYear() + date.getMonth() / 12;
-      const targetX = (year - startDecade) * pixelsPerYear;
-      return {
-        ...event,
-        renderX: targetX,
-        originalIndex: i,
-        dateObj: date,
-      };
-    });
+    return events
+      .filter((event) => event.image_url && event.image_url.trim() !== "") // Eradicate broken links
+      .map((event, i) => {
+        const date = new Date(event.event_date);
+        const year = date.getFullYear() + date.getMonth() / 12;
+        const targetX = (year - startDecade) * pixelsPerYear;
+        return {
+          ...event,
+          renderX: targetX,
+          originalIndex: i,
+          dateObj: date,
+        };
+      });
   }, [events, startDecade, pixelsPerYear]);
 
   // SCROLL TRIGGER: Drives physical alignment
@@ -113,17 +121,17 @@ export function TimecardDisplay() {
     [renderedEvents],
   );
 
-  // AUTO-PLAY: Functions exclusively when fully immersed globally in Focus Mode per instruction
+  // AUTO-PLAY: Functions exclusively when fully immersed globally in Focus Mode loop natively (3 Seconds!)
   useEffect(() => {
     if (!isPlaying || renderedEvents.length === 0 || !focusMode) return;
     const interval = setInterval(() => {
       const nextIdx = (activeIndex + 1) % renderedEvents.length;
       scrollToIndex(nextIdx, true);
-    }, 4500);
+    }, 3000); // 3 Second Sequence enforced
     return () => clearInterval(interval);
   }, [isPlaying, renderedEvents, activeIndex, scrollToIndex, focusMode]);
 
-  // TICKS: Explicit inclusion guarantees boundaries are permanently imprinted visually alongside 5/10 scales
+  // TICKS: Explicit inclusion guarantees boundaries are permanently imprinted visually alongside scales
   const ticks: { val: number; isMajor: boolean }[] = [];
   const tickInterval = pixelsPerYear >= 60 ? 5 : 10;
 
@@ -141,7 +149,8 @@ export function TimecardDisplay() {
 
   // NATIVE TRACKING: Resolves Overlapping Image paradoxes by allowing explicit selection without brutal overwrite.
   const handleScroll = () => {
-    if (!stripRef.current || renderedEvents.length === 0) return;
+    // SUSPEND entirely if Focus Mode controls layout viewport visually
+    if (!stripRef.current || renderedEvents.length === 0 || focusMode) return;
     if (scrollTimeoutRef.current) window.clearTimeout(scrollTimeoutRef.current);
 
     if (!isSlideshowDrivingRef.current) {
@@ -157,14 +166,11 @@ export function TimecardDisplay() {
         }
       });
 
-      // BUG FIX: If user deliberately taps an overlapping identical-date polaroid making it active,
-      // the physics tracker must not reset it to index 0 dynamically during scroll vibrations
       const activeX = renderedEvents[activeIndex]?.renderX;
       const closestX = renderedEvents[closestIdx]?.renderX;
 
       if (closestIdx !== activeIndex) {
         if (activeX !== closestX) {
-          // Only overwrite state if they explicitly scroll to a mechanically different pixel coordinate
           setActiveExpandedId(null);
           setActiveIndex(closestIdx);
         }
@@ -188,7 +194,7 @@ export function TimecardDisplay() {
 
   return (
     <div className="fixed inset-0 bg-slate-50 text-slate-800 overflow-hidden flex flex-col select-none cursor-none pointer-events-auto touch-none overscroll-none">
-      {/* OVERLAY RED LINE - Dynamically hidden perfectly natively when inspecting items */}
+      {/* OVERLAY RED LINE */}
       <div
         className={`absolute top-[25%] bottom-[15%] left-1/2 -translate-x-1/2 w-[2px] bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] z-[45] pointer-events-none transition-opacity duration-300 ${activeExpandedId !== null || focusMode ? "opacity-0" : "opacity-100"}`}
       >
@@ -210,10 +216,10 @@ export function TimecardDisplay() {
               width: `${renderedEvents[renderedEvents.length - 1]?.renderX || (endDecade - startDecade) * pixelsPerYear}px`,
             }}
           >
-            <div className="absolute bottom-[28%] w-full h-12 pointer-events-none z-[10]">
+            <div className="absolute bottom-[28%] w-full h-8 pointer-events-none z-[10]">
               {ticks.map((tick, idx) => (
                 <div
-                  // biome-ignore lint/suspicious/noArrayIndexKey: Static array mapping
+                  // biome-ignore lint/suspicious/noArrayIndexKey: Static native mapping
                   key={`${tick.val}-${idx}`}
                   className="absolute bottom-0 flex flex-col items-center"
                   style={{
@@ -223,19 +229,19 @@ export function TimecardDisplay() {
                 >
                   {tick.isMajor ? (
                     <div className="flex flex-col items-center">
-                      <span className="text-xl font-bold text-slate-700 mb-2">
+                      <span className="text-lg font-bold text-slate-700 mb-2">
                         {tick.val}
                       </span>
-                      <div className="w-[2px] h-12 bg-slate-500 shadow-sm" />
+                      <div className="w-[2px] h-8 bg-slate-500 shadow-sm" />
                     </div>
                   ) : (
-                    <div className="w-[1px] h-6 bg-slate-300" />
+                    <div className="w-[1px] h-4 bg-slate-300" />
                   )}
                 </div>
               ))}
             </div>
 
-            {/* PHOTOS (Dynamically stacked upwards precisely averting the tick boundaries strictly) */}
+            {/* PHOTOS */}
             {renderedEvents.map((event, i) => {
               const isActive = activeIndex === i;
               const isExpanded = activeExpandedId === event.id;
@@ -246,18 +252,18 @@ export function TimecardDisplay() {
                   className={`absolute pointer-events-none transition-all duration-[600ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
                     ${
                       isActive && isExpanded
-                        ? // STAGE 2
-                          "scale-[2.8] -translate-y-[8rem] -translate-x-[45%] z-[60] shadow-[0_30px_60px_rgba(0,0,0,0.15)] opacity-100"
+                        ? // STAGE 2: Expanded Info
+                          "scale-[2.4] translate-y-1/2 -translate-x-[45%] z-[60] shadow-[0_30px_60px_rgba(0,0,0,0.15)] opacity-100"
                         : isActive && !isExpanded
-                          ? // STAGE 1
-                            "scale-[2.6] -translate-y-6 translate-x-[15%] z-[50] shadow-2xl opacity-100"
-                          : // STAGE 0 (Background)
+                          ? // STAGE 1: Hover Center
+                            "scale-[2.0] translate-y-1/2 translate-x-[15%] z-[50] shadow-2xl opacity-100"
+                          : // STAGE 0: Background
                             "scale-100 translate-y-0 -translate-x-1/2 z-[20] opacity-[0.8]"
                     }`}
                   style={{
                     left: `${event.renderX}px`,
-                    // Built strictly upwards from a safe minimum boundary avoiding Ticks
-                    bottom: `${35 + (i % 3) * 15}%`,
+                    // Dynamic physical vertical alignment logic. If Active, animate cleanly into dead middle!
+                    bottom: isActive ? "50%" : `${35 + (i % 3) * 15}%`,
                   }}
                 >
                   <div
@@ -267,23 +273,26 @@ export function TimecardDisplay() {
                         if (!isExpanded) setActiveExpandedId(event.id);
                         else setFocusMode(true);
                       } else {
-                        // Crucially overrides manual interactions onto background photos forcing state identically
                         scrollToIndex(i, true);
                       }
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        if (isActive && !isExpanded)
-                          setActiveExpandedId(event.id);
-                        else if (isActive && isExpanded) setFocusMode(true);
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        if (isActive) {
+                          if (!isExpanded) setActiveExpandedId(event.id);
+                          else setFocusMode(true);
+                        } else {
+                          scrollToIndex(i, true);
+                        }
                       }
                     }}
                     role="button"
                     tabIndex={0}
                   >
+                    {/* Compaction native to w-16 h-16! */}
                     <img
                       src={event.image_url}
-                      className="w-20 h-20 object-cover border-[3px] border-white rounded shadow-sm bg-white"
+                      className="w-16 h-16 object-cover border-[3px] border-white rounded shadow-sm bg-white"
                       alt=""
                     />
                   </div>
@@ -324,8 +333,8 @@ export function TimecardDisplay() {
         </p>
       </div>
 
-      {/* Extreme Shield Node preventing Fat Thumb clicks from dragging physics */}
-      <div className="absolute bottom-6 right-8 p-12 touch-none pointer-events-auto z-[50]">
+      {/* Tightly Compacted Shield Node bounds logic */}
+      <div className="absolute bottom-2 right-4 p-8 touch-none pointer-events-auto z-[50]">
         <div className="flex gap-8 text-slate-400 font-light tracking-widest uppercase text-[12px] cursor-none tracking-widest">
           <button
             type="button"
@@ -337,7 +346,7 @@ export function TimecardDisplay() {
           <button
             type="button"
             className="hover:text-slate-800 cursor-none p-4 -m-4"
-            onClick={() => setPixelsPerYear((p) => Math.max(12, p - 20))}
+            onClick={() => setPixelsPerYear((p) => Math.max(minPixels, p - 20))}
           >
             Zoom Out
           </button>
@@ -405,27 +414,27 @@ export function TimecardDisplay() {
             </svg>
           </button>
 
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[205] flex items-center justify-center p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-[65vw]">
+          {/* Vertical Elevation physically clearing the text layer! */}
+          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-[205] flex items-center justify-center p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-[65vw]">
             <img
               src={activeEvent.image_url}
-              className="w-auto h-auto max-h-[70vh] border border-[#d1d5db]"
+              className="w-auto h-auto max-h-[60vh] border border-[#d1d5db]"
               alt=""
             />
           </div>
 
-          {/* Explicitly positioned LEFT per directions */}
-          <div className="absolute left-20 lg:left-32 top-1/2 -translate-y-1/2 flex flex-col justify-center text-left z-[210] max-w-sm lg:max-w-md">
-            <h1 className="text-3xl lg:text-4xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
+          <div className="absolute left-10 lg:left-24 top-1/2 -translate-y-1/2 flex flex-col justify-center text-left z-[210] max-w-xs lg:max-w-md">
+            <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
               {activeEvent.title}
             </h1>
-            <h2 className="text-xl text-slate-500 italic mb-6 tracking-widest font-serif">
+            <h2 className="text-lg text-slate-500 italic mb-6 tracking-widest font-serif">
               {activeEvent.dateObj.toLocaleDateString(undefined, {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               })}
             </h2>
-            <p className="text-[17px] lg:text-[20px] text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
+            <p className="text-[15px] lg:text-[18px] text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
               {activeEvent.description}
             </p>
           </div>
@@ -440,7 +449,7 @@ export function TimecardDisplay() {
             </p>
           </div>
 
-          {/* Slideshow toggler solely operated inside Focus Mode */}
+          {/* Slideshow toggler operates inside Focus Mode */}
           <div className="absolute bottom-10 left-10 text-slate-400 z-[210] pointer-events-auto font-light uppercase text-[12px] cursor-none tracking-widest">
             <button
               type="button"

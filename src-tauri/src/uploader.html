@@ -305,9 +305,21 @@
 
         document.getElementById('step-4').onsubmit = async (e) => {
             e.preventDefault();
+            
+            const dateStr = queue_date.value.trim();
+            if (!dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                alert("WARNING: Invalid Date! You must enter a valid date in YYYY-MM-DD format (e.g. 2020-05-15). Please correct it before uploading!");
+                return;
+            }
+            const file = QUEUE_FILES[QUEUE_INDEX];
+            if (!file) {
+                alert("CRITICAL ERROR: No image file detected!");
+                return;
+            }
+
             const btn = document.getElementById('btn-submit-4');
             btn.disabled = true; const originalText = btn.innerText; btn.innerText = "Processing...";
-            const file = QUEUE_FILES[QUEUE_INDEX];
+
             const reader = new FileReader();
             reader.onloadend = async () => {
                 const img = new Image();
