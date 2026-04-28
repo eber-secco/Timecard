@@ -277,7 +277,7 @@ export function TimecardDisplay() {
                       }
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.key === "Enter" || e.key === " ") {
                         if (isActive) {
                           if (!isExpanded) setActiveExpandedId(event.id);
                           else setFocusMode(true);
@@ -298,7 +298,7 @@ export function TimecardDisplay() {
                   </div>
 
                   {isActive && isExpanded && !focusMode && (
-                    <div className="absolute top-1/2 -translate-y-1/2 left-[110%] w-[450px] bg-slate-50/95 backdrop-blur-sm p-4 border border-slate-200 shadow-xl scale-[0.4] origin-left pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-500 cursor-none">
+                    <div className="absolute top-1/2 -translate-y-1/2 left-[110%] w-[300px] bg-slate-50/95 backdrop-blur-sm p-4 border border-slate-200 shadow-xl scale-[0.4] origin-left pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-500 cursor-none">
                       <p className="text-[12px] uppercase tracking-widest font-bold text-red-500 mb-1 border-b border-red-100 pb-1 w-max">
                         {event.dateObj.toLocaleDateString(undefined, {
                           year: "numeric",
