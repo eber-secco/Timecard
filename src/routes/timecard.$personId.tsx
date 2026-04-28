@@ -24,6 +24,7 @@ export function TimecardDisplay() {
   // Stages: Hover (active) -> Expanded (activeExpandedId) -> Focus (focusMode)
   const [activeExpandedId, setActiveExpandedId] = useState<number | null>(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [pixelsPerYear, setPixelsPerYear] = useState(72);
@@ -83,7 +84,12 @@ export function TimecardDisplay() {
   // RENDER ENGINE: Mathematically pure mapping photos purely to dates + Filter out broken DB artifacts natively!
   const renderedEvents = useMemo(() => {
     return events
-      .filter((event) => event.image_url && event.image_url.trim() !== "") // Eradicate broken links
+      .filter(
+        (event) =>
+          event.image_url &&
+          event.image_url.trim() !== "" &&
+          !failedImages.has(event.id),
+      ) // Eradicate broken links dynamically
       .map((event, i) => {
         const date = new Date(event.event_date);
         const year = date.getFullYear() + date.getMonth() / 12;
@@ -95,7 +101,7 @@ export function TimecardDisplay() {
           dateObj: date,
         };
       });
-  }, [events, startDecade, pixelsPerYear]);
+  }, [events, startDecade, pixelsPerYear, failedImages]);
 
   // SCROLL TRIGGER: Drives physical alignment
   const scrollToIndex = useCallback(
@@ -294,6 +300,9 @@ export function TimecardDisplay() {
                       src={event.image_url}
                       className="w-16 h-16 object-cover border-[3px] border-white rounded shadow-sm bg-white"
                       alt=""
+                      onError={() =>
+                        setFailedImages((prev) => new Set(prev).add(event.id))
+                      }
                     />
                   </div>
 
