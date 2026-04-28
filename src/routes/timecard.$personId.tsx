@@ -333,6 +333,14 @@ export function TimecardDisplay() {
         </p>
       </div>
 
+      <button
+        type="button"
+        onClick={() => invoke("close_app")}
+        className="absolute top-8 left-8 text-slate-400 hover:text-red-600 tracking-[0.3em] uppercase text-[12px] font-bold p-4 pointer-events-auto transition-colors z-[50] cursor-none"
+      >
+        &#10005; EXIT APP
+      </button>
+
       {/* Tightly Compacted Shield Node bounds logic */}
       <div className="absolute bottom-2 right-4 p-8 touch-none pointer-events-auto z-[50]">
         <div className="flex gap-8 text-slate-400 font-light tracking-widest uppercase text-[12px] cursor-none tracking-widest">
@@ -423,7 +431,7 @@ export function TimecardDisplay() {
             />
           </div>
 
-          <div className="absolute left-10 lg:left-24 top-1/2 -translate-y-1/2 flex flex-col justify-center text-left z-[210] max-w-xs lg:max-w-md">
+          <div className="absolute left-24 lg:left-48 top-1/2 -translate-y-1/2 flex flex-col justify-center text-left z-[210] max-w-xs lg:max-w-md">
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
               {activeEvent.title}
             </h1>
