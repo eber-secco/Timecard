@@ -476,6 +476,27 @@ export function TimecardDisplay() {
               {isPlaying ? "PAUSE" : "SLIDESHOW"}
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Are you sure you want to delete this photo forever?",
+                )
+              ) {
+                invoke("delete_event", { eventId: activeEvent.id })
+                  .then(() => {
+                    setFocusMode(false);
+                    setActiveExpandedId(null);
+                  })
+                  .catch(console.error);
+              }
+            }}
+            className="absolute top-10 left-10 text-slate-400 hover:text-red-600 tracking-[0.3em] uppercase text-[12px] font-bold p-4 pointer-events-auto transition-colors z-[210] cursor-none"
+          >
+            &#128465; DELETE PHOTO
+          </button>
         </div>
       )}
     </div>

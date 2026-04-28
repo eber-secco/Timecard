@@ -156,6 +156,14 @@ fn close_app() {
   std::process::exit(0);
 }
 
+#[tauri::command]
+fn delete_event(state: State<AppState>, event_id: i64) -> Result<(), String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  db.execute("DELETE FROM events WHERE id = ?1", rusqlite::params![event_id])
+    .map_err(|e| e.to_string())?;
+  Ok(())
+}
+
 // AXUM HANDLERS
 
 async fn api_create_account(
@@ -460,7 +468,8 @@ pub fn run() {
       get_kiosk_url,
       get_current_display_state,
       get_server_status,
-      close_app
+      close_app,
+      delete_event
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
