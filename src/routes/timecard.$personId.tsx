@@ -219,7 +219,7 @@ export function TimecardDisplay() {
           <div
             className="relative h-full flex-shrink-0"
             style={{
-              width: `${renderedEvents[renderedEvents.length - 1]?.renderX || (endDecade - startDecade) * pixelsPerYear}px`,
+              width: `${Math.max(renderedEvents[renderedEvents.length - 1]?.renderX || 0, (endDecade - startDecade) * pixelsPerYear) + 150}px`,
             }}
           >
             <div className="absolute bottom-[28%] w-full h-8 pointer-events-none z-[10]">
