@@ -6,7 +6,7 @@ use axum::{
   routing::post,
   Json, Router,
 };
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, State};
