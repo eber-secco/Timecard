@@ -1,5 +1,6 @@
 use axum::{
   extract::{DefaultBodyLimit, State as AxumState},
+  http::StatusCode,
   response::Html,
   routing::get,
   routing::post,
@@ -126,18 +127,47 @@ fn get_kiosk_url() -> String {
   format!("http://{}.local:8080", host.to_string_lossy())
 }
 
+#[tauri::command]
+fn get_first_person_id(state: State<AppState>) -> Result<Option<i64>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  let mut stmt = db
+    .prepare("SELECT id FROM people LIMIT 1")
+    .map_err(|e| e.to_string())?;
+  let id: Option<i64> = stmt
+    .query_row([], |row| row.get(0))
+    .optional()
+    .map_err(|e| e.to_string())?;
+  Ok(id)
+}
+
+#[tauri::command]
+fn delete_event(state: State<AppState>, event_id: i64) -> Result<(), String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  db.execute(
+    "DELETE FROM events WHERE id = ?1",
+    rusqlite::params![event_id],
+  )
+  .map_err(|e| e.to_string())?;
+  Ok(())
+}
+
+#[tauri::command]
+fn close_app() {
+  std::process::exit(0);
+}
+
 // AXUM HANDLERS
 
 async fn api_create_account(
   AxumState(state): AxumState<AxumStateData>,
   Json(payload): Json<CreateAccountRequest>,
-) -> Result<Json<i64>, String> {
-  let db = state.db.lock().map_err(|e| e.to_string())?;
+) -> Result<Json<i64>, (StatusCode, String)> {
+  let db = state.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Mutex error: {}", e)))?;
   db.execute(
     "INSERT INTO accounts (email, birthdate, password) VALUES (?1, ?2, ?3)",
     rusqlite::params![payload.email, payload.birthdate, payload.password],
   )
-  .map_err(|e| e.to_string())?;
+  .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
 
   Ok(Json(db.last_insert_rowid()))
 }
@@ -145,8 +175,8 @@ async fn api_create_account(
 async fn api_create_person(
   AxumState(state): AxumState<AxumStateData>,
   Json(payload): Json<CreatePersonRequest>,
-) -> Result<Json<i64>, String> {
-  let db = state.db.lock().map_err(|e| e.to_string())?;
+) -> Result<Json<i64>, (StatusCode, String)> {
+  let db = state.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Mutex error: {}", e)))?;
   db.execute(
     "INSERT INTO people (account_id, name, birth_date, dead_date) VALUES (?1, ?2, ?3, ?4)",
     rusqlite::params![
@@ -156,18 +186,20 @@ async fn api_create_person(
       payload.dead_date
     ],
   )
-  .map_err(|e| e.to_string())?;
+  .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
 
   let person_id = db.last_insert_rowid();
-  *state.active_person_id.lock().unwrap() = Some(person_id);
+  if let Ok(mut active_person) = state.active_person_id.lock() {
+      *active_person = Some(person_id);
+  }
   Ok(Json(person_id))
 }
 
 async fn api_add_memory(
   AxumState(state): AxumState<AxumStateData>,
   Json(payload): Json<AddMemoryRequest>,
-) -> Result<Json<i64>, String> {
-  let db = state.db.lock().map_err(|e| e.to_string())?;
+) -> Result<Json<i64>, (StatusCode, String)> {
+  let db = state.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Mutex error: {}", e)))?;
   db.execute(
     "INSERT INTO events (person_id, event_date, title, description, image_url) VALUES (?1, ?2, ?3, ?4, ?5)",
     rusqlite::params![
@@ -178,13 +210,20 @@ async fn api_add_memory(
       payload.image_url
     ],
   )
-  .map_err(|e| e.to_string())?;
+  .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
 
   Ok(Json(db.last_insert_rowid()))
 }
 
 async fn serve_uploader() -> Html<&'static str> {
   Html(include_str!("uploader.html"))
+}
+
+async fn serve_heic2any() -> impl axum::response::IntoResponse {
+  (
+    [(axum::http::header::CONTENT_TYPE, "application/javascript")],
+    include_str!("heic2any.min.js"),
+  )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -253,6 +292,7 @@ pub fn run() {
       tauri::async_runtime::spawn(async move {
         let axum_app = Router::new()
           .route("/", get(serve_uploader))
+          .route("/heic2any.min.js", get(serve_heic2any))
           .route("/api/accounts", post(api_create_account))
           .route("/api/people", post(api_create_person))
           .route("/api/events", post(api_add_memory)) // The new memory endpoint
@@ -271,7 +311,10 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       get_events,
       get_kiosk_url,
-      get_current_display_state
+      get_current_display_state,
+      get_first_person_id,
+      delete_event,
+      close_app
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

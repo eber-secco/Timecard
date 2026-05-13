@@ -5,7 +5,17 @@ export const Home: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    void navigate({ to: "/connect", replace: true });
+    void invoke<number | null>("get_first_person_id")
+      .then((id) => {
+        if (id) {
+          void navigate({ to: `/timecard/${id}`, replace: true });
+        } else {
+          void navigate({ to: "/connect", replace: true });
+        }
+      })
+      .catch(() => {
+        void navigate({ to: "/connect", replace: true });
+      });
   }, [navigate]);
 
   return (

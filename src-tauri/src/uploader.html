@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Timecard Connect</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/heic2any.min.js"></script>
     <style>
         .step { display: none; }
         .step.active { display: flex; animation: fadeIn 0.4s ease; }
@@ -129,10 +130,11 @@
                     GLOBAL_ACCOUNT_ID = await res.json();
                     nextStep(2);
                 } else {
-                    alert('Failed to create account.');
+                    const errText = await res.text();
+                    alert(`Failed to create account. Error: ${res.status} - ${errText}`);
                 }
             } catch (err) {
-                alert(err.message);
+                alert(`Network/Client Error: ${err.message}`);
             } finally {
                 btn.innerText = 'Continue'; btn.disabled = false;
             }
@@ -160,10 +162,11 @@
                     GLOBAL_PERSON_ID = await res.json();
                     nextStep(3);
                 } else {
-                    alert('Failed to create person.');
+                    const errText = await res.text();
+                    alert(`Failed to create person. Error: ${res.status} - ${errText}`);
                 }
             } catch (err) {
-                alert(err.message);
+                alert(`Network/Client Error: ${err.message}`);
             } finally {
                 btn.innerText = 'Continue'; btn.disabled = false;
             }
@@ -175,7 +178,34 @@
             const btn = document.getElementById('btn-submit-3');
             btn.innerText = 'Uploading...'; btn.disabled = true;
 
-            const file = document.getElementById('mem_file').files[0];
+            let file = document.getElementById('mem_file').files[0];
+            
+            const isHeic = file && (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic'));
+
+            if (file && !file.type.startsWith('image/') && !isHeic) {
+                alert(`Upload blocked: You selected an unsupported file type. Please select an image. Video uploads are not yet supported and will crash the timeline!`);
+                btn.innerText = 'Complete Setup'; btn.disabled = false;
+                return;
+            }
+
+            if (isHeic) {
+                try {
+                    btn.innerText = 'Processing HEIC...';
+                    const convertedBlob = await heic2any({
+                        blob: file,
+                        toType: "image/jpeg",
+                        quality: 0.8
+                    });
+                    const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                    file = new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: "image/jpeg" });
+                    btn.innerText = 'Uploading...';
+                } catch (e) {
+                    alert(`Failed to process HEIC file: ${e.message}`);
+                    btn.innerText = 'Complete Setup'; btn.disabled = false;
+                    return;
+                }
+            }
+
             const reader = new FileReader();
 
             reader.onloadend = async () => {
@@ -205,13 +235,18 @@
                         if (res.ok) {
                             nextStep(4);
                         } else {
-                            alert('Upload failed.');
+                            const errText = await res.text();
+                            alert(`Upload failed. Error: ${res.status} - ${errText}`);
                         }
                     } catch (err) {
-                        alert(err.message);
+                        alert(`Network/Client Error: ${err.message}`);
                     } finally {
                         btn.innerText = 'Complete Setup'; btn.disabled = false;
                     }
+                };
+                img.onerror = () => {
+                    alert('Error: The selected file could not be read as an image.');
+                    btn.innerText = 'Complete Setup'; btn.disabled = false;
                 };
                 img.src = reader.result;
             };
