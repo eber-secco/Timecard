@@ -91,6 +91,28 @@ fn get_current_display_state(state: State<AppState>) -> Result<Option<Person>, S
 }
 
 #[tauri::command]
+fn get_person(state: State<AppState>, person_id: i64) -> Result<Option<Person>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  let mut stmt = db
+    .prepare("SELECT id, name, birth_date, dead_date FROM people WHERE id = ?1")
+    .map_err(|e| e.to_string())?;
+
+  let person = stmt
+    .query_row(rusqlite::params![person_id], |row| {
+      Ok(Person {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        birth_date: row.get(2)?,
+        dead_date: row.get(3)?,
+      })
+    })
+    .optional()
+    .map_err(|e| e.to_string())?;
+
+  Ok(person)
+}
+
+#[tauri::command]
 fn get_events(state: State<AppState>, person_id: i64) -> Result<Vec<TimelineEvent>, String> {
   let db = state.db.lock().map_err(|e| e.to_string())?;
 
@@ -313,6 +335,7 @@ pub fn run() {
       get_kiosk_url,
       get_current_display_state,
       get_first_person_id,
+      get_person,
       delete_event,
       close_app
     ])

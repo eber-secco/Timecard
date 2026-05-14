@@ -24,7 +24,9 @@ export function TimecardDisplay() {
   const stripRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void invoke<Person | null>("get_current_display_state")
+    void invoke<Person | null>("get_person", {
+      personId: parseInt(personId, 10),
+    })
       .then((data) => {
         setPerson(data);
       })
