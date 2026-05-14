@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 
 export const Home: React.FC = () => {
