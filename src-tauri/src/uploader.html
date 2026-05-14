@@ -286,7 +286,7 @@
             try {
                 const res = await fetch('/api/join', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ account_id: GLOBAL_ACCOUNT_ID, join_code: join_code_input.value })
+                    body: JSON.stringify({ account_id: parseInt(GLOBAL_ACCOUNT_ID, 10), join_code: join_code_input.value })
                 });
                 if (res.ok) { loadDashboard(); } 
                 else { alert("Could not join timeline. Check the code."); }
@@ -299,7 +299,7 @@
                 const res = await fetch('/api/people', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        account_id: GLOBAL_ACCOUNT_ID,
+                        account_id: parseInt(GLOBAL_ACCOUNT_ID, 10),
                         name: per_name.value,
                         birth_date: per_birth.value,
                         dead_date: per_death.value || "Present"
