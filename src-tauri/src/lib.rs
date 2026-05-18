@@ -343,6 +343,10 @@ async fn serve_uploader() -> Html<&'static str> {
   Html(include_str!("uploader.html"))
 }
 
+async fn serve_tailwind() -> impl axum::response::IntoResponse {
+  ([(axum::http::header::CONTENT_TYPE, "application/javascript")], include_str!("tailwind.js"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -440,6 +444,7 @@ pub fn run() {
           .route("/api/join", post(api_join_timeline))
           .route("/api/switch", post(api_switch_active))
           .route("/api/events", post(api_add_memory)) // The new memory endpoint
+          .route("/tailwind.js", get(serve_tailwind))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)
           .layer(CorsLayer::permissive());
