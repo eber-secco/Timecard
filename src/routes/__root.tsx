@@ -1,47 +1,14 @@
-import {
-  createRootRoute,
-  HeadContent,
-  Outlet,
-  Scripts,
-} from "@tanstack/react-router";
-
-import appCss from "../styles.css?url";
+import { createRootRoute, Outlet } from "@tanstack/react-router";
+import "../styles.css";
 
 export const RootComponent: React.FC = () => {
   return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body className="antialiased">
-        <Outlet />
-        <Scripts />
-      </body>
-    </html>
+    <div className="antialiased min-h-screen">
+      <Outlet />
+    </div>
   );
 };
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      {
-        charSet: "utf-8",
-      },
-      {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
-      },
-      {
-        title: "Tauri + TanStack Start",
-      },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
-  }),
-
   component: RootComponent,
 });
