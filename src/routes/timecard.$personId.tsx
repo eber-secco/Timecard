@@ -384,7 +384,7 @@ export function TimecardDisplay() {
               setFocusMode(false);
               setIsPlaying(false);
             }}
-            className="absolute top-10 right-10 text-slate-400 hover:text-red-700 tracking-[0.3em] uppercase text-[13px] font-bold p-4 pointer-events-auto transition-colors z-[210] cursor-none"
+            className="absolute top-10 right-10 text-slate-400 hover:text-red-700 tracking-[0.3em] uppercase text-[10px] font-bold p-3 pointer-events-auto transition-colors z-[210] cursor-none"
           >
             &#10005; Close
           </button>
@@ -439,42 +439,49 @@ export function TimecardDisplay() {
           {/* 3-Column Grid for Focus Mode (Prevents Overlap) */}
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-24 lg:px-32 z-[205] grid grid-cols-12 gap-8 lg:gap-16 items-center pointer-events-none">
             {/* Column 1: Text Layer */}
-            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col justify-center text-left pointer-events-auto">
-              <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
+            <div className="col-span-12 md:col-span-4 lg:col-span-3 flex flex-col justify-center text-left pointer-events-auto">
+              <h1 className="text-xl lg:text-2xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
                 {activeEvent.title}
               </h1>
-              <h2 className="text-lg text-slate-500 italic mb-4 tracking-widest font-serif">
+              <h2 className="text-sm text-slate-500 italic mb-3 tracking-widest font-serif">
                 {activeEvent.dateObj.toLocaleDateString(undefined, {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
                 })}
               </h2>
-              <p className="text-sm lg:text-base text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
+              <p className="text-xs lg:text-sm text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
                 {activeEvent.description}
               </p>
+              {activeEvent.uploader_name && (
+                <p className="text-[11px] text-slate-400 font-serif italic mt-3">
+                  Uploaded by{" "}
+                  <span className="font-semibold">
+                    {activeEvent.uploader_name}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Column 2 & 3: Image Layer (Grows naturally depending on aspect ratio) */}
-            <div className="col-span-12 md:col-span-7 lg:col-span-8 flex justify-center lg:justify-start pointer-events-auto">
-              <div className="p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-full">
+            <div className="col-span-12 md:col-span-8 lg:col-span-9 flex justify-center lg:justify-start pointer-events-auto">
+              <div className="p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-full flex flex-col gap-2">
                 <img
                   src={activeEvent.image_url}
-                  className="w-auto h-auto max-h-[60vh] object-contain border border-[#d1d5db]"
+                  className="w-auto h-auto max-h-[78vh] object-contain border border-[#d1d5db]"
                   alt=""
                 />
+                <div className="flex justify-between items-center px-1 text-slate-700">
+                  <span className="text-[13px] uppercase tracking-[0.2em] font-semibold">
+                    {person.name}
+                  </span>
+                  <span className="text-[11px] tracking-[0.1em] text-slate-400 italic">
+                    {birthYear} &bull;{" "}
+                    {person.dead_date === "Present" ? "Present" : deadYear}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="absolute bottom-[4%] w-full flex flex-col items-center pointer-events-none z-[100]">
-            <h1 className="text-3xl lg:text-4xl tracking-[0.4em] uppercase text-slate-800 font-bold mb-2">
-              {person.name}
-            </h1>
-            <p className="text-xl tracking-[0.2em] text-slate-500 italic font-light">
-              {birthYear} &bull;{" "}
-              {person.dead_date === "Present" ? "Present" : deadYear}
-            </p>
           </div>
 
           {/* Slideshow toggler operates inside Focus Mode */}
@@ -504,9 +511,25 @@ export function TimecardDisplay() {
                   .catch(console.error);
               }
             }}
-            className="absolute top-10 left-10 text-slate-400 hover:text-red-600 tracking-[0.3em] uppercase text-[12px] font-bold p-4 pointer-events-auto transition-colors z-[210] cursor-none"
+            className="absolute top-10 left-10 text-slate-400 hover:text-red-600 tracking-[0.3em] uppercase text-[9.5px] font-bold p-3 pointer-events-auto transition-colors z-[210] cursor-none flex items-center gap-1.5"
           >
-            &#128465; DELETE PHOTO
+            {/* biome-ignore lint/a11y/noSvgWithoutTitle: Natively Disabled */}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            DELETE PHOTO
           </button>
         </div>
       )}

@@ -120,7 +120,10 @@
                 <form id="form-signup" class="flex flex-col gap-4">
                     <input type="text" id="acc_name" placeholder="Full Name" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
                     <input type="email" id="acc_email" placeholder="Email" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
-                    <input type="text" id="acc_birth" placeholder="Birthdate (YYYY-MM-DD)" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
+                    <div class="flex flex-col gap-1 text-left w-full">
+                        <label class="text-xs font-semibold text-slate-500 pl-1">Birthdate</label>
+                        <input type="date" id="acc_birth" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
+                    </div>
                     <input type="password" id="acc_pass" placeholder="Password" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
                     <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95">Create Account</button>
                     <button type="button" onclick="toggleAuth(true)" class="text-slate-500 text-sm hover:underline">Already have an account? Login</button>
@@ -164,13 +167,13 @@
                 <label class="text-sm font-semibold text-slate-700">Full Name</label>
                 <input type="text" id="per_name" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all" placeholder="John Doe">
             </div>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1 text-left w-full">
                 <label class="text-sm font-semibold text-slate-700">Birth Date</label>
-                <input type="text" id="per_birth" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all" placeholder="YYYY-MM-DD">
+                <input type="date" id="per_birth" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
             </div>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1 text-left w-full">
                 <label class="text-sm font-semibold text-slate-700">Resting Date (Optional)</label>
-                <input type="text" id="per_death" class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all" placeholder="Present">
+                <input type="date" id="per_death" class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
             </div>
             <button type="submit" class="mt-4 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 text-lg">Create Timeline</button>
             <button type="button" onclick="loadDashboard()" class="text-slate-400 text-sm hover:underline text-center">Cancel</button>
@@ -197,9 +200,9 @@
             <div class="flex justify-center w-full bg-slate-100 rounded-xl p-2 h-40">
                 <img id="queue_preview" class="h-full object-contain rounded-lg shadow-sm" src="" alt="Preview">
             </div>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1 text-left w-full">
                 <label class="text-sm font-semibold text-slate-700">Date of Photo</label>
-                <input type="text" id="queue_date" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all" placeholder="YYYY-MM-DD">
+                <input type="date" id="queue_date" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
             </div>
             <div class="flex flex-col gap-1">
                 <label class="text-sm font-semibold text-slate-700">Title</label>
