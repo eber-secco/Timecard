@@ -183,7 +183,12 @@ async fn api_create_account(
   let db = state.db.lock().map_err(|e| e.to_string())?;
   db.execute(
     "INSERT INTO accounts (name, email, birthdate, password) VALUES (?1, ?2, ?3, ?4)",
-    rusqlite::params![payload.name, payload.email, payload.birthdate, payload.password],
+    rusqlite::params![
+      payload.name,
+      payload.email,
+      payload.birthdate,
+      payload.password
+    ],
   )
   .map_err(|e| e.to_string())?;
 
@@ -384,13 +389,15 @@ async fn api_change_password(
   Json(payload): Json<ChangePasswordRequest>,
 ) -> Result<Json<bool>, String> {
   let db = state.db.lock().map_err(|e| e.to_string())?;
-  
+
   // Verify old password
-  let count: i64 = db.query_row(
-    "SELECT COUNT(*) FROM accounts WHERE id = ?1 AND password = ?2",
-    rusqlite::params![payload.account_id, payload.old_password],
-    |row| row.get(0),
-  ).unwrap_or(0);
+  let count: i64 = db
+    .query_row(
+      "SELECT COUNT(*) FROM accounts WHERE id = ?1 AND password = ?2",
+      rusqlite::params![payload.account_id, payload.old_password],
+      |row| row.get(0),
+    )
+    .unwrap_or(0);
 
   if count == 0 {
     return Err("Incorrect current password".to_string());
@@ -399,7 +406,8 @@ async fn api_change_password(
   db.execute(
     "UPDATE accounts SET password = ?1 WHERE id = ?2",
     rusqlite::params![payload.new_password, payload.account_id],
-  ).map_err(|e| e.to_string())?;
+  )
+  .map_err(|e| e.to_string())?;
 
   Ok(Json(true))
 }
@@ -409,7 +417,10 @@ async fn serve_uploader() -> Html<&'static str> {
 }
 
 async fn serve_tailwind() -> impl axum::response::IntoResponse {
-  ([(axum::http::header::CONTENT_TYPE, "application/javascript")], include_str!("tailwind.js"))
+  (
+    [(axum::http::header::CONTENT_TYPE, "application/javascript")],
+    include_str!("tailwind.js"),
+  )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -481,10 +492,16 @@ pub fn run() {
         "ALTER TABLE events ADD COLUMN person_id INTEGER NOT NULL DEFAULT 1",
         [],
       );
-      
+
       // Lazily add new schema fields for phase 2
-      let _ = conn.execute("ALTER TABLE accounts ADD COLUMN name TEXT NOT NULL DEFAULT ''", []);
-      let _ = conn.execute("ALTER TABLE events ADD COLUMN uploaded_by_account_id INTEGER", []);
+      let _ = conn.execute(
+        "ALTER TABLE accounts ADD COLUMN name TEXT NOT NULL DEFAULT ''",
+        [],
+      );
+      let _ = conn.execute(
+        "ALTER TABLE events ADD COLUMN uploaded_by_account_id INTEGER",
+        [],
+      );
 
       let shared_db = Arc::new(Mutex::new(conn));
       let active_person = Arc::new(Mutex::new(None));
@@ -515,7 +532,10 @@ pub fn run() {
           .route("/api/join", post(api_join_timeline))
           .route("/api/switch", post(api_switch_active))
           .route("/api/events", post(api_add_memory)) // The new memory endpoint
-          .route("/api/timeline-access/{person_id}", get(api_get_timeline_access))
+          .route(
+            "/api/timeline-access/{person_id}",
+            get(api_get_timeline_access),
+          )
           .route("/api/change-password", post(api_change_password))
           .route("/tailwind.js", get(serve_tailwind))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
