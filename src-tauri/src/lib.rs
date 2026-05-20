@@ -19,6 +19,7 @@ pub struct TimelineEvent {
   pub title: String,
   pub description: String,
   pub image_url: String,
+  pub uploader_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -49,6 +50,7 @@ pub struct SwitchActiveRequest {
 
 #[derive(Deserialize)]
 pub struct CreateAccountRequest {
+  pub name: String,
   pub email: String,
   pub birthdate: String,
   pub password: String,
@@ -69,6 +71,7 @@ pub struct AddMemoryRequest {
   pub title: String,
   pub description: String,
   pub image_url: String,
+  pub uploaded_by_account_id: i64,
 }
 
 struct AppState {
@@ -120,7 +123,10 @@ fn get_events(state: State<AppState>, person_id: i64) -> Result<Vec<TimelineEven
 
   let mut stmt = db
     .prepare(
-      "SELECT id, person_id, event_date, title, description, image_url FROM events WHERE person_id = ?1 ORDER BY event_date ASC",
+      "SELECT e.id, e.person_id, e.event_date, e.title, e.description, e.image_url, a.name 
+       FROM events e 
+       LEFT JOIN accounts a ON e.uploaded_by_account_id = a.id
+       WHERE e.person_id = ?1 ORDER BY e.event_date ASC",
     )
     .map_err(|e| e.to_string())?;
 
@@ -133,6 +139,7 @@ fn get_events(state: State<AppState>, person_id: i64) -> Result<Vec<TimelineEven
         title: row.get(3)?,
         description: row.get(4)?,
         image_url: row.get(5)?,
+        uploader_name: row.get(6).unwrap_or(None),
       })
     })
     .map_err(|e| e.to_string())?;
@@ -175,8 +182,8 @@ async fn api_create_account(
 ) -> Result<Json<i64>, String> {
   let db = state.db.lock().map_err(|e| e.to_string())?;
   db.execute(
-    "INSERT INTO accounts (email, birthdate, password) VALUES (?1, ?2, ?3)",
-    rusqlite::params![payload.email, payload.birthdate, payload.password],
+    "INSERT INTO accounts (name, email, birthdate, password) VALUES (?1, ?2, ?3, ?4)",
+    rusqlite::params![payload.name, payload.email, payload.birthdate, payload.password],
   )
   .map_err(|e| e.to_string())?;
 
@@ -325,18 +332,76 @@ async fn api_add_memory(
 ) -> Result<Json<i64>, String> {
   let db = state.db.lock().map_err(|e| e.to_string())?;
   db.execute(
-    "INSERT INTO events (person_id, event_date, title, description, image_url) VALUES (?1, ?2, ?3, ?4, ?5)",
+    "INSERT INTO events (person_id, event_date, title, description, image_url, uploaded_by_account_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     rusqlite::params![
       payload.person_id,
       payload.event_date,
       payload.title,
       payload.description,
-      payload.image_url
+      payload.image_url,
+      payload.uploaded_by_account_id
     ],
   )
   .map_err(|e| e.to_string())?;
 
   Ok(Json(db.last_insert_rowid()))
+}
+
+async fn api_get_timeline_access(
+  AxumState(state): AxumState<AxumStateData>,
+  axum::extract::Path(person_id): axum::extract::Path<i64>,
+) -> Result<Json<Vec<String>>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  let mut stmt = db
+    .prepare(
+      "SELECT COALESCE(NULLIF(a.name, ''), a.email) as display_name 
+       FROM people_access pa 
+       JOIN accounts a ON pa.account_id = a.id 
+       WHERE pa.person_id = ?1",
+    )
+    .map_err(|e| e.to_string())?;
+
+  let names_iter = stmt
+    .query_map(rusqlite::params![person_id], |row| row.get(0))
+    .map_err(|e| e.to_string())?;
+
+  let mut names = Vec::new();
+  for name in names_iter {
+    names.push(name.map_err(|e| e.to_string())?);
+  }
+  Ok(Json(names))
+}
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+  pub account_id: i64,
+  pub old_password: String,
+  pub new_password: String,
+}
+
+async fn api_change_password(
+  AxumState(state): AxumState<AxumStateData>,
+  Json(payload): Json<ChangePasswordRequest>,
+) -> Result<Json<bool>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  
+  // Verify old password
+  let count: i64 = db.query_row(
+    "SELECT COUNT(*) FROM accounts WHERE id = ?1 AND password = ?2",
+    rusqlite::params![payload.account_id, payload.old_password],
+    |row| row.get(0),
+  ).unwrap_or(0);
+
+  if count == 0 {
+    return Err("Incorrect current password".to_string());
+  }
+
+  db.execute(
+    "UPDATE accounts SET password = ?1 WHERE id = ?2",
+    rusqlite::params![payload.new_password, payload.account_id],
+  ).map_err(|e| e.to_string())?;
+
+  Ok(Json(true))
 }
 
 async fn serve_uploader() -> Html<&'static str> {
@@ -366,6 +431,7 @@ pub fn run() {
           "
         CREATE TABLE IF NOT EXISTS accounts (
           id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL DEFAULT '',
           email TEXT NOT NULL,
           birthdate TEXT NOT NULL,
           password TEXT NOT NULL
@@ -387,6 +453,7 @@ pub fn run() {
         CREATE TABLE IF NOT EXISTS events (
           id INTEGER PRIMARY KEY,
           person_id INTEGER NOT NULL DEFAULT 1,
+          uploaded_by_account_id INTEGER,
           event_date TEXT NOT NULL,
           title TEXT NOT NULL,
           description TEXT NOT NULL,
@@ -414,6 +481,10 @@ pub fn run() {
         "ALTER TABLE events ADD COLUMN person_id INTEGER NOT NULL DEFAULT 1",
         [],
       );
+      
+      // Lazily add new schema fields for phase 2
+      let _ = conn.execute("ALTER TABLE accounts ADD COLUMN name TEXT NOT NULL DEFAULT ''", []);
+      let _ = conn.execute("ALTER TABLE events ADD COLUMN uploaded_by_account_id INTEGER", []);
 
       let shared_db = Arc::new(Mutex::new(conn));
       let active_person = Arc::new(Mutex::new(None));
@@ -444,6 +515,8 @@ pub fn run() {
           .route("/api/join", post(api_join_timeline))
           .route("/api/switch", post(api_switch_active))
           .route("/api/events", post(api_add_memory)) // The new memory endpoint
+          .route("/api/timeline-access/{person_id}", get(api_get_timeline_access))
+          .route("/api/change-password", post(api_change_password))
           .route("/tailwind.js", get(serve_tailwind))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)

@@ -42,6 +42,14 @@ export const Connect: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-8 pb-20 font-serif flex flex-col items-center justify-center cursor-none *:-cursor-none">
+      <button
+        type="button"
+        onClick={() => invoke("close_app")}
+        className="absolute top-8 left-8 text-slate-400 hover:text-red-600 tracking-[0.3em] uppercase text-[12px] font-bold p-4 pointer-events-auto transition-colors z-[50] cursor-none"
+      >
+        &#10005; EXIT APP
+      </button>
+
       <header className="mb-12 w-full flex flex-col items-center max-w-3xl">
         <h1 className="text-4xl md:text-6xl text-center font-black text-slate-800 mb-8 tracking-tight">
           Timecard
@@ -75,8 +83,11 @@ export const Connect: React.FC = () => {
                 </span>
                 Join Wi-Fi:{" "}
                 <strong className="text-slate-800 bg-slate-100 px-4 py-2 rounded-lg ml-1">
-                  makerspacenet
+                  Timecard-Kiosk
                 </strong>
+              </p>
+              <p className="text-slate-500 text-base -mt-4 ml-10">
+                Password: <strong className="text-slate-600">timecard123</strong>
               </p>
               <p className="text-slate-600">
                 <span className="font-black text-slate-700 text-2xl mr-3">

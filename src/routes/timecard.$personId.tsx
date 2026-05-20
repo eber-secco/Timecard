@@ -318,9 +318,11 @@ export function TimecardDisplay() {
                       <h4 className="text-[28px] font-black leading-tight text-slate-800 mb-2 truncate font-sans tracking-tight">
                         {event.title}
                       </h4>
-                      <p className="text-[20px] text-slate-600 leading-relaxed font-serif line-clamp-3">
-                        {event.description}
-                      </p>
+                      {event.uploader_name && (
+                        <p className="text-[14px] text-slate-500 font-serif italic line-clamp-1">
+                          Uploaded by <span className="font-bold">{event.uploader_name}</span>
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -431,29 +433,37 @@ export function TimecardDisplay() {
             </svg>
           </button>
 
-          {/* Vertical Elevation physically clearing the text layer! */}
-          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-[205] flex items-center justify-center p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-[65vw]">
-            <img
-              src={activeEvent.image_url}
-              className="w-auto h-auto max-h-[60vh] border border-[#d1d5db]"
-              alt=""
-            />
-          </div>
+          {/* 3-Column Grid for Focus Mode (Prevents Overlap) */}
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-24 lg:px-32 z-[205] grid grid-cols-12 gap-8 lg:gap-16 items-center pointer-events-none">
+            
+            {/* Column 1: Text Layer */}
+            <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col justify-center text-left pointer-events-auto">
+              <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
+                {activeEvent.title}
+              </h1>
+              <h2 className="text-lg text-slate-500 italic mb-4 tracking-widest font-serif">
+                {activeEvent.dateObj.toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </h2>
+              <p className="text-sm lg:text-base text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
+                {activeEvent.description}
+              </p>
+            </div>
 
-          <div className="absolute left-24 lg:left-48 top-1/2 -translate-y-1/2 flex flex-col justify-center text-left z-[210] max-w-xs lg:max-w-md">
-            <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
-              {activeEvent.title}
-            </h1>
-            <h2 className="text-lg text-slate-500 italic mb-6 tracking-widest font-serif">
-              {activeEvent.dateObj.toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </h2>
-            <p className="text-[15px] lg:text-[18px] text-slate-600 leading-[1.65] font-light font-serif line-clamp-[12]">
-              {activeEvent.description}
-            </p>
+            {/* Column 2 & 3: Image Layer (Grows naturally depending on aspect ratio) */}
+            <div className="col-span-12 md:col-span-7 lg:col-span-8 flex justify-center lg:justify-start pointer-events-auto">
+              <div className="p-[6px] bg-[#f8f9fa] border border-[#e5e7eb] shadow-md max-w-full">
+                <img
+                  src={activeEvent.image_url}
+                  className="w-auto h-auto max-h-[60vh] object-contain border border-[#d1d5db]"
+                  alt=""
+                />
+              </div>
+            </div>
+
           </div>
 
           <div className="absolute bottom-[4%] w-full flex flex-col items-center pointer-events-none z-[100]">
