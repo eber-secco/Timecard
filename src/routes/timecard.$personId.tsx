@@ -320,7 +320,10 @@ export function TimecardDisplay() {
                       </h4>
                       {event.uploader_name && (
                         <p className="text-[14px] text-slate-500 font-serif italic line-clamp-1">
-                          Uploaded by <span className="font-bold">{event.uploader_name}</span>
+                          Uploaded by{" "}
+                          <span className="font-bold">
+                            {event.uploader_name}
+                          </span>
                         </p>
                       )}
                     </div>
@@ -435,7 +438,6 @@ export function TimecardDisplay() {
 
           {/* 3-Column Grid for Focus Mode (Prevents Overlap) */}
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-24 lg:px-32 z-[205] grid grid-cols-12 gap-8 lg:gap-16 items-center pointer-events-none">
-            
             {/* Column 1: Text Layer */}
             <div className="col-span-12 md:col-span-5 lg:col-span-4 flex flex-col justify-center text-left pointer-events-auto">
               <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-[1.1] mb-2 font-sans tracking-tight">
@@ -463,7 +465,6 @@ export function TimecardDisplay() {
                 />
               </div>
             </div>
-
           </div>
 
           <div className="absolute bottom-[4%] w-full flex flex-col items-center pointer-events-none z-[100]">

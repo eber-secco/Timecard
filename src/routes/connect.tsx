@@ -87,7 +87,8 @@ export const Connect: React.FC = () => {
                 </strong>
               </p>
               <p className="text-slate-500 text-base -mt-4 ml-10">
-                Password: <strong className="text-slate-600">timecard123</strong>
+                Password:{" "}
+                <strong className="text-slate-600">timecard123</strong>
               </p>
               <p className="text-slate-600">
                 <span className="font-black text-slate-700 text-2xl mr-3">
