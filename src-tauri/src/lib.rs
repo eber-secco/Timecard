@@ -123,7 +123,7 @@ fn get_events(state: State<AppState>, person_id: i64) -> Result<Vec<TimelineEven
 
   let mut stmt = db
     .prepare(
-      "SELECT e.id, e.person_id, e.event_date, e.title, e.description, e.image_url, a.name 
+      "SELECT e.id, e.person_id, e.event_date, e.title, e.description, e.image_url, COALESCE(NULLIF(a.name, ''), a.email) 
        FROM events e 
        LEFT JOIN accounts a ON e.uploaded_by_account_id = a.id
        WHERE e.person_id = ?1 ORDER BY e.event_date ASC",
