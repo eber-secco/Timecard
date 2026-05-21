@@ -411,6 +411,34 @@ async fn api_change_password(
 
   Ok(Json(true))
 }
+#[derive(serde::Serialize)]
+pub struct AccountProfileResponse {
+  pub name: String,
+  pub email: String,
+  pub birthdate: String,
+}
+
+async fn api_get_account_profile(
+  AxumState(state): AxumState<AxumStateData>,
+  axum::extract::Path(account_id): axum::extract::Path<i64>,
+) -> Result<Json<AccountProfileResponse>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  let profile = db
+    .query_row(
+      "SELECT COALESCE(name, ''), email, COALESCE(birthdate, '') FROM accounts WHERE id = ?1",
+      rusqlite::params![account_id],
+      |row| {
+        Ok(AccountProfileResponse {
+          name: row.get(0)?,
+          email: row.get(1)?,
+          birthdate: row.get(2)?,
+        })
+      },
+    )
+    .map_err(|e| e.to_string())?;
+
+  Ok(Json(profile))
+}
 
 async fn serve_uploader() -> Html<&'static str> {
   Html(include_str!("uploader.html"))
@@ -537,6 +565,7 @@ pub fn run() {
             get(api_get_timeline_access),
           )
           .route("/api/change-password", post(api_change_password))
+          .route("/api/accounts/{account_id}", get(api_get_account_profile))
           .route("/tailwind.js", get(serve_tailwind))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)
