@@ -2,6 +2,8 @@ name: Build for Raspberry Pi
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"           # triggers when you push a tag like: git tag v1.0 && git push --tags
   workflow_dispatch:   # also lets you trigger it manually from the GitHub website

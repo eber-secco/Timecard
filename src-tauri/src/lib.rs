@@ -460,12 +460,12 @@ async fn api_setup_wifi(
     
     // Turn down the hotspot
     let _ = std::process::Command::new("nmcli")
-      .args(&["con", "down", "Timecard-Kiosk"])
+      .args(["con", "down", "Timecard-Kiosk"])
       .output();
       
     // Connect to new network
     let _ = std::process::Command::new("nmcli")
-      .args(&["dev", "wifi", "connect", &ssid, "password", &password])
+      .args(["dev", "wifi", "connect", &ssid, "password", &password])
       .output();
   });
 

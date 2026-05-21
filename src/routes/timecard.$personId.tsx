@@ -463,9 +463,32 @@ export function TimecardDisplay() {
               )}
               {activeEvent.audio_url && activeEvent.audio_url.length > 10 && (
                 <div className="mt-4 flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 shadow-sm w-fit">
-                  <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
-                  <span className="text-xs font-bold uppercase tracking-wider">Playing Story</span>
-                  <audio autoPlay src={activeEvent.audio_url} className="hidden" />
+                  <svg
+                    className="w-4 h-4 animate-pulse"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    role="img"
+                    aria-label="Playing audio"
+                  >
+                    <title>Playing audio</title>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                    />
+                  </svg>
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    Playing Story
+                  </span>
+                  <audio
+                    autoPlay
+                    src={activeEvent.audio_url}
+                    className="hidden"
+                  >
+                    <track kind="captions" />
+                  </audio>
                 </div>
               )}
             </div>
