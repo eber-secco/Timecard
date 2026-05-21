@@ -6,6 +6,7 @@ export interface TimelineEvent {
   title: string;
   description: string;
   image_url: string;
+  audio_url?: string;
 }
 
 interface TimelineItemProps {

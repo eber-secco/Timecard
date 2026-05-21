@@ -71,6 +71,7 @@ pub struct AddMemoryRequest {
   pub title: String,
   pub description: String,
   pub image_url: String,
+  pub audio_url: Option<String>,
   pub uploaded_by_account_id: i64,
 }
 
@@ -337,13 +338,14 @@ async fn api_add_memory(
 ) -> Result<Json<i64>, String> {
   let db = state.db.lock().map_err(|e| e.to_string())?;
   db.execute(
-    "INSERT INTO events (person_id, event_date, title, description, image_url, uploaded_by_account_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    "INSERT INTO events (person_id, event_date, title, description, image_url, audio_url, uploaded_by_account_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     rusqlite::params![
       payload.person_id,
       payload.event_date,
       payload.title,
       payload.description,
       payload.image_url,
+      payload.audio_url.unwrap_or_default(),
       payload.uploaded_by_account_id
     ],
   )
@@ -440,6 +442,36 @@ async fn api_get_account_profile(
   Ok(Json(profile))
 }
 
+#[derive(Deserialize)]
+pub struct SetupWifiRequest {
+  pub ssid: String,
+  pub password: String,
+}
+
+async fn api_setup_wifi(
+  Json(payload): Json<SetupWifiRequest>,
+) -> Result<Json<bool>, String> {
+  let ssid = payload.ssid.clone();
+  let password = payload.password.clone();
+  
+  std::thread::spawn(move || {
+    // Wait a couple of seconds to allow the HTTP response to return successfully
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    
+    // Turn down the hotspot
+    let _ = std::process::Command::new("nmcli")
+      .args(&["con", "down", "Timecard-Kiosk"])
+      .output();
+      
+    // Connect to new network
+    let _ = std::process::Command::new("nmcli")
+      .args(&["dev", "wifi", "connect", &ssid, "password", &password])
+      .output();
+  });
+
+  Ok(Json(true))
+}
+
 async fn serve_uploader() -> Html<&'static str> {
   Html(include_str!("uploader.html"))
 }
@@ -481,7 +513,8 @@ pub fn run() {
           name TEXT NOT NULL,
           birth_date TEXT NOT NULL,
           dead_date TEXT NOT NULL,
-          join_code TEXT
+          join_code TEXT,
+          audio_url TEXT
         );
         CREATE TABLE IF NOT EXISTS people_access (
           id INTEGER PRIMARY KEY,
@@ -496,7 +529,8 @@ pub fn run() {
           event_date TEXT NOT NULL,
           title TEXT NOT NULL,
           description TEXT NOT NULL,
-          image_url TEXT NOT NULL
+          image_url TEXT NOT NULL,
+          audio_url TEXT
         );
         ",
         )
@@ -530,6 +564,8 @@ pub fn run() {
         "ALTER TABLE events ADD COLUMN uploaded_by_account_id INTEGER",
         [],
       );
+      let _ = conn.execute("ALTER TABLE people ADD COLUMN audio_url TEXT", []);
+      let _ = conn.execute("ALTER TABLE events ADD COLUMN audio_url TEXT", []);
 
       let shared_db = Arc::new(Mutex::new(conn));
       let active_person = Arc::new(Mutex::new(None));
@@ -566,6 +602,7 @@ pub fn run() {
           )
           .route("/api/change-password", post(api_change_password))
           .route("/api/accounts/{account_id}", get(api_get_account_profile))
+          .route("/api/setup-wifi", post(api_setup_wifi))
           .route("/tailwind.js", get(serve_tailwind))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)
