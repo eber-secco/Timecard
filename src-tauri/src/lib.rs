@@ -448,21 +448,19 @@ pub struct SetupWifiRequest {
   pub password: String,
 }
 
-async fn api_setup_wifi(
-  Json(payload): Json<SetupWifiRequest>,
-) -> Result<Json<bool>, String> {
+async fn api_setup_wifi(Json(payload): Json<SetupWifiRequest>) -> Result<Json<bool>, String> {
   let ssid = payload.ssid.clone();
   let password = payload.password.clone();
-  
+
   std::thread::spawn(move || {
     // Wait a couple of seconds to allow the HTTP response to return successfully
     std::thread::sleep(std::time::Duration::from_secs(2));
-    
+
     // Turn down the hotspot
     let _ = std::process::Command::new("nmcli")
       .args(["con", "down", "Timecard-Kiosk"])
       .output();
-      
+
     // Connect to new network
     let _ = std::process::Command::new("nmcli")
       .args(["dev", "wifi", "connect", &ssid, "password", &password])
