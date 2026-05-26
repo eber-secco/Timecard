@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TimelineEvent } from "../components/TimelineItem";
 
@@ -63,6 +64,23 @@ export function TimecardDisplay() {
     const interval = setInterval(fetchPersonAndEvents, 3000);
     return () => clearInterval(interval);
   }, [personId, navigate]);
+
+  useEffect(() => {
+    const unlisten = listen<number>("kiosk-focus", (event) => {
+      const targetId = event.payload;
+      const targetIndex = events.findIndex((e) => e.id === targetId);
+      if (targetIndex !== -1) {
+        setActiveIndex(targetIndex);
+        setActiveExpandedId(targetId);
+        setFocusMode(true);
+        setIsPlaying(true);
+      }
+    });
+
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, [events]);
 
   const birthYear = person?.birth_date
     ? parseInt(person.birth_date.substring(0, 4), 10)

@@ -1,14 +1,15 @@
 use axum::{
-  extract::{DefaultBodyLimit, State as AxumState},
+  extract::{DefaultBodyLimit, Path, Query, State as AxumState},
   response::Html,
   routing::get,
   routing::post,
+  routing::put,
   Json, Router,
 };
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tower_http::cors::CorsLayer;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -20,6 +21,7 @@ pub struct TimelineEvent {
   pub description: String,
   pub image_url: String,
   pub uploader_name: Option<String>,
+  pub audio_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -90,6 +92,7 @@ fn get_server_status(state: State<AppState>) -> String {
 struct AxumStateData {
   db: Arc<Mutex<Connection>>,
   active_person_id: Arc<Mutex<Option<i64>>>,
+  app_handle: tauri::AppHandle,
 }
 
 #[tauri::command]
@@ -141,6 +144,7 @@ fn get_events(state: State<AppState>, person_id: i64) -> Result<Vec<TimelineEven
         description: row.get(4)?,
         image_url: row.get(5)?,
         uploader_name: row.get(6).unwrap_or(None),
+        audio_url: row.get(7).unwrap_or(None),
       })
     })
     .map_err(|e| e.to_string())?;
@@ -414,32 +418,123 @@ async fn api_change_password(
   Ok(Json(true))
 }
 #[derive(serde::Serialize)]
-pub struct AccountProfileResponse {
+pub struct AccountProfile {
+  pub id: i64,
   pub name: String,
   pub email: String,
-  pub birthdate: String,
 }
 
 async fn api_get_account_profile(
   AxumState(state): AxumState<AxumStateData>,
   axum::extract::Path(account_id): axum::extract::Path<i64>,
-) -> Result<Json<AccountProfileResponse>, String> {
+) -> Result<Json<AccountProfile>, String> {
   let db = state.db.lock().map_err(|e| e.to_string())?;
-  let profile = db
-    .query_row(
-      "SELECT COALESCE(name, ''), email, COALESCE(birthdate, '') FROM accounts WHERE id = ?1",
-      rusqlite::params![account_id],
-      |row| {
-        Ok(AccountProfileResponse {
-          name: row.get(0)?,
-          email: row.get(1)?,
-          birthdate: row.get(2)?,
-        })
-      },
-    )
+
+  let mut stmt = db
+    .prepare("SELECT id, name, email FROM accounts WHERE id = ?1")
     .map_err(|e| e.to_string())?;
 
-  Ok(Json(profile))
+  let account = stmt
+    .query_row([account_id], |row| {
+      Ok(AccountProfile {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        email: row.get(2)?,
+      })
+    })
+    .map_err(|e| e.to_string())?;
+
+  Ok(Json(account))
+}
+
+#[derive(Deserialize)]
+pub struct EventsQuery {
+  pub account_id: i64,
+}
+
+async fn api_get_all_events(
+  AxumState(state): AxumState<AxumStateData>,
+  Query(query): Query<EventsQuery>,
+) -> Result<Json<Vec<TimelineEvent>>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+
+  let mut person_stmt = db
+    .prepare("SELECT person_id FROM account_people WHERE account_id = ?1")
+    .map_err(|e| e.to_string())?;
+  
+  let person_iter = person_stmt
+    .query_map([query.account_id], |row| row.get::<_, i64>(0))
+    .map_err(|e| e.to_string())?;
+    
+  let mut all_events = Vec::new();
+
+  for person_res in person_iter {
+    if let Ok(person_id) = person_res {
+      let mut stmt = db
+        .prepare("SELECT id, person_id, event_date, title, description, image_url, uploader_name, audio_url FROM events WHERE person_id = ?1 ORDER BY event_date ASC")
+        .map_err(|e| e.to_string())?;
+
+      let event_iter = stmt
+        .query_map([person_id], |row| {
+          Ok(TimelineEvent {
+            id: row.get(0)?,
+            person_id: row.get(1)?,
+            event_date: row.get(2)?,
+            title: row.get(3)?,
+            description: row.get(4)?,
+            image_url: row.get(5)?,
+            uploader_name: row.get(6).unwrap_or(None),
+            audio_url: row.get(7).unwrap_or(None),
+          })
+        })
+        .map_err(|e| e.to_string())?;
+
+      for event in event_iter {
+        if let Ok(evt) = event {
+          all_events.push(evt);
+        }
+      }
+    }
+  }
+
+  Ok(Json(all_events))
+}
+
+async fn api_update_event(
+  AxumState(state): AxumState<AxumStateData>,
+  Path(event_id): Path<i64>,
+  Json(payload): Json<TimelineEvent>,
+) -> Result<Json<bool>, String> {
+  let db = state.db.lock().map_err(|e| e.to_string())?;
+  db.execute(
+    "UPDATE events SET title = ?1, description = ?2, image_url = ?3, uploader_name = ?4, audio_url = ?5 WHERE id = ?6",
+    rusqlite::params![
+      payload.title,
+      payload.description,
+      payload.image_url,
+      payload.uploader_name,
+      payload.audio_url,
+      event_id
+    ],
+  )
+  .map_err(|e| e.to_string())?;
+
+  Ok(Json(true))
+}
+
+#[derive(Deserialize)]
+pub struct KioskFocusPayload {
+  pub event_id: i64,
+  pub account_id: i64,
+}
+
+async fn api_kiosk_focus(
+  AxumState(state): AxumState<AxumStateData>,
+  Json(payload): Json<KioskFocusPayload>,
+) -> Result<Json<bool>, String> {
+  // Emit event to frontend
+  state.app_handle.emit("kiosk-focus", payload.event_id).map_err(|e| e.to_string())?;
+  Ok(Json(true))
 }
 
 #[derive(Deserialize)]
@@ -478,6 +573,20 @@ async fn serve_uploader_css() -> impl axum::response::IntoResponse {
   (
     [(axum::http::header::CONTENT_TYPE, "text/css")],
     include_str!("uploader.css"),
+  )
+}
+
+async fn serve_flatpickr_css() -> impl axum::response::IntoResponse {
+  (
+    [(axum::http::header::CONTENT_TYPE, "text/css")],
+    include_str!("flatpickr.min.css"),
+  )
+}
+
+async fn serve_flatpickr_js() -> impl axum::response::IntoResponse {
+  (
+    [(axum::http::header::CONTENT_TYPE, "application/javascript")],
+    include_str!("flatpickr.min.js"),
   )
 }
 
@@ -576,10 +685,13 @@ pub fn run() {
         server_status: server_status.clone(),
       });
 
+      let app_handle = app.handle().clone();
+
       // Spawn the Axum server
       let axum_state = AxumStateData {
         db: shared_db,
         active_person_id: active_person,
+        app_handle,
       };
 
       tauri::async_runtime::spawn(async move {
@@ -594,6 +706,9 @@ pub fn run() {
           .route("/api/join", post(api_join_timeline))
           .route("/api/switch", post(api_switch_active))
           .route("/api/events", post(api_add_memory)) // The new memory endpoint
+          .route("/api/events", get(api_get_all_events))
+          .route("/api/events/{event_id}", put(api_update_event))
+          .route("/api/kiosk/focus", post(api_kiosk_focus))
           .route(
             "/api/timeline-access/{person_id}",
             get(api_get_timeline_access),
@@ -602,6 +717,8 @@ pub fn run() {
           .route("/api/accounts/{account_id}", get(api_get_account_profile))
           .route("/api/setup-wifi", post(api_setup_wifi))
           .route("/uploader.css", get(serve_uploader_css))
+          .route("/flatpickr.min.css", get(serve_flatpickr_css))
+          .route("/flatpickr.min.js", get(serve_flatpickr_js))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)
           .layer(CorsLayer::permissive());

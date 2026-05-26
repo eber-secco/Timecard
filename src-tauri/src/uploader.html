@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Timecard Connect</title>
     <link rel="stylesheet" href="/uploader.css">
+    <link rel="stylesheet" href="/flatpickr.min.css">
+    <script src="/flatpickr.min.js"></script>
 
     <style>
         .step { display: none; }
@@ -118,7 +120,7 @@
                     <input type="email" id="acc_email" placeholder="Email" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
                     <div class="flex flex-col gap-1 text-left w-full">
                         <label class="text-xs font-semibold text-slate-500 pl-1">Birthdate</label>
-                        <input type="date" id="acc_birth" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
+                        <input type="text" id="acc_birth" required class="flatpickr-date px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
                     </div>
                     <input type="password" id="acc_pass" placeholder="Password" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
                     <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95">Create Account</button>
@@ -165,11 +167,11 @@
             </div>
             <div class="flex flex-col gap-1 text-left w-full">
                 <label class="text-sm font-semibold text-slate-700">Birth Date</label>
-                <input type="date" id="per_birth" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
+                <input type="text" id="per_birth" required class="flatpickr-date px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
             </div>
             <div class="flex flex-col gap-1 text-left w-full">
                 <label class="text-sm font-semibold text-slate-700">Resting Date (Optional)</label>
-                <input type="date" id="per_death" class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
+                <input type="text" id="per_death" class="flatpickr-date px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
             </div>
             <button type="submit" class="mt-4 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 text-lg">Create Timeline</button>
             <button type="button" onclick="loadDashboard()" class="text-slate-400 text-sm hover:underline text-center">Cancel</button>
@@ -198,7 +200,7 @@
             </div>
             <div class="flex flex-col gap-1 text-left w-full">
                 <label class="text-sm font-semibold text-slate-700">Date of Photo</label>
-                <input type="date" id="queue_date" required class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
+                <input type="text" id="queue_date" required class="flatpickr-date px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all">
             </div>
             <div class="flex flex-col gap-1">
                 <label class="text-sm font-semibold text-slate-700">Title</label>
@@ -303,50 +305,70 @@
             <button type="button" onclick="loadDashboard()" class="text-slate-400 text-sm hover:underline text-center mt-2">Back to Dashboard</button>
         </div>
 
-        <!-- Step Storytelling: Brainstorming & Prototype Mock -->
-        <div id="step-storytelling" class="step flex-col w-full gap-5 font-serif">
+        <!-- Step Storytelling: Gallery & Recording -->
+        <div id="step-storytelling" class="step flex-col w-full gap-5 font-serif pb-24">
             <h2 class="text-2xl font-bold text-slate-800 text-center mb-1 flex items-center justify-center gap-2">
                 🎙️ Storytelling Mode
             </h2>
             <p class="text-slate-500 text-center text-sm mb-2">Connect the memories of your timeline with audio narratives.</p>
 
             <div class="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 flex flex-col gap-3 text-sm text-slate-700">
-                <h3 class="font-bold text-blue-900 text-base">🔊 Pi Audio Capabilities</h3>
-                <p>The Raspberry Pi Kiosk supports native audio output out of the box via:</p>
+                <h3 class="font-bold text-blue-900 text-base">🔊 Microphone Permissions</h3>
+                <p>To record audio, please ensure your mobile browser has Microphone permissions enabled.</p>
                 <ul class="list-disc pl-5 flex flex-col gap-1 text-slate-600">
-                    <li>HDMI outputs directly to TV speakers</li>
-                    <li>3.5mm headphone jack for external speaker setups</li>
-                    <li>USB/Bluetooth audio soundcards & speakers</li>
+                    <li>On iOS: Settings > Safari > Microphone > Allow</li>
+                    <li>On Android: Settings > Apps > Chrome > Permissions > Microphone > Allow</li>
                 </ul>
             </div>
 
             <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3 text-sm text-slate-700">
-                <h3 class="font-bold text-slate-800 text-base">🚀 Proposed Architecture</h3>
-                <p class="text-slate-600">
-                    When you view a photo in Focus Mode on the Kiosk display, it can play custom audio narratives:
-                </p>
+                <h3 class="font-bold text-slate-800 text-base">🚀 How Storymode Works</h3>
                 <div class="bg-white p-3 rounded-xl border border-slate-100 flex flex-col gap-2 font-mono text-xs text-slate-500">
-                    <div>1. Phone records voice snippet (.webm/.mp3)</div>
-                    <div>2. Saved to database event row</div>
-                    <div>3. Kiosk plays file natively using rust-rodio/cpal</div>
+                    <div>1. Tap a photo below.</div>
+                    <div>2. The Kiosk display will immediately sync to show that photo.</div>
+                    <div>3. Record your voice narrative using your phone.</div>
                 </div>
             </div>
 
-            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3 items-center text-center">
-                <h3 class="font-bold text-slate-800 text-base">Prototype Preview</h3>
-                <p class="text-xs text-slate-500">Simulate recording a story snippet for your timeline</p>
-                <div class="flex gap-3">
-                    <button id="story-rec-btn" onclick="simulateRecord()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1">
-                        <span class="w-2 h-2 bg-white rounded-full animate-ping"></span> Record Story
-                    </button>
-                    <button id="story-play-btn" onclick="simulatePlay()" disabled class="bg-slate-200 text-slate-400 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-not-allowed">
-                        ▶ Play Preview
-                    </button>
-                </div>
-                <p id="story-mock-status" class="text-xs font-semibold text-green-600 hidden"></p>
+            <h3 class="font-bold text-slate-800 text-lg mt-2">Your Photos</h3>
+            <div id="storymode-gallery" class="grid grid-cols-2 md:grid-cols-3 gap-3 w-full">
+                <!-- Gallery populated via JS -->
+            </div>
+            
+            <div id="storymode-empty" class="hidden text-center p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                <p class="text-slate-500 text-sm">Photos with audio stories will appear here once an audio is recorded.</p>
             </div>
 
-            <button type="button" onclick="loadDashboard()" class="text-slate-400 text-sm hover:underline text-center mt-2">Back to Dashboard</button>
+            <button type="button" onclick="loadDashboard()" class="text-slate-400 text-sm hover:underline text-center mt-4">Back to Dashboard</button>
+        </div>
+
+        <!-- Storymode Recording Modal -->
+        <div id="storymode-record-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-xl">
+                <h3 class="font-bold text-slate-800 text-lg text-center">Record Narrative</h3>
+                <img id="storymode-modal-img" src="" class="w-full h-40 object-cover rounded-xl bg-slate-100">
+                
+                <div class="flex flex-col gap-3 items-center">
+                    <p id="storymode-record-timer" class="text-3xl font-mono font-bold text-slate-800 hidden">00:00</p>
+                    
+                    <button id="storymode-btn-start" type="button" onclick="storymodeStartRecording()" class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 flex justify-center items-center gap-2">
+                        <span class="w-3 h-3 bg-white rounded-full"></span> Record Audio
+                    </button>
+                    
+                    <button id="storymode-btn-stop" type="button" onclick="storymodeStopRecording()" class="w-full hidden bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 justify-center items-center gap-2">
+                        <span class="w-3 h-3 bg-red-500 rounded-sm animate-pulse"></span> Stop Recording
+                    </button>
+                </div>
+
+                <div id="storymode-playback-container" class="hidden flex-col gap-2 mt-2 w-full">
+                    <audio id="storymode-audio-playback" controls class="w-full h-10 rounded-lg"></audio>
+                </div>
+
+                <div class="flex gap-2 w-full mt-2">
+                    <button type="button" onclick="closeStorymodeModal()" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold transition-all">Cancel</button>
+                    <button id="storymode-btn-save" type="button" onclick="storymodeSaveRecording()" disabled class="flex-1 bg-slate-800 text-white py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed">Save</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -366,6 +388,14 @@
         function hideError() {
             document.getElementById('error-banner').classList.add('hidden');
         }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            flatpickr(".flatpickr-date", {
+                dateFormat: "Y-m-d",
+                disableMobile: true // Forces the custom UI on mobile devices instead of native picker
+            });
+            loadDashboard();
+        });
 
         function toggleMenu() {
             const drawer = document.getElementById('nav-drawer');
@@ -432,6 +462,7 @@
 
         function loadStorytellingMode() {
             nextStep('storytelling');
+            loadStorymode();
         }
 
         function nextStep(id) {
@@ -634,8 +665,215 @@
                     document.getElementById('record-timer').innerText = `${m}:${s}`;
                 }, 1000);
             } catch (err) {
-                alert("Microphone access denied or unavailable.");
+                if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+                    showError("Microphone access is disabled. Please open your phone's Settings > Browser and enable Microphone access to record stories.");
+                }
+        
+        let storymodeActiveEventId = null;
+        let storymodeMediaRecorder;
+        let storymodeAudioChunks = [];
+        let storymodeAudioBlob = null;
+        let storymodeAudioBase64 = null;
+        let storymodeTimerInterval;
+        let storymodeSeconds = 0;
+
+        async function loadStorymode() {
+            try {
+                const res = await fetch(`http://${window.location.hostname}:3000/api/events?account_id=${GLOBAL_ACCOUNT_ID}`);
+                if (!res.ok) throw new Error("Failed to load events");
+                const events = await res.json();
+                
+                const gallery = document.getElementById('storymode-gallery');
+                const emptyState = document.getElementById('storymode-empty');
+                
+                gallery.innerHTML = '';
+                
+                if (events.length === 0) {
+                    gallery.classList.add('hidden');
+                    emptyState.classList.remove('hidden');
+                } else {
+                    gallery.classList.remove('hidden');
+                    emptyState.classList.add('hidden');
+                    
+                    events.forEach(evt => {
+                        const div = document.createElement('div');
+                        div.className = 'relative aspect-square rounded-xl overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-95';
+                        div.onclick = () => openStorymodeModal(evt.id, evt.media_url, evt.title, evt.audio_url);
+                        
+                        const img = document.createElement('img');
+                        img.src = evt.media_url;
+                        img.className = 'w-full h-full object-cover';
+                        
+                        const overlay = document.createElement('div');
+                        overlay.className = 'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2';
+                        
+                        const title = document.createElement('p');
+                        title.className = 'text-white text-xs font-bold truncate';
+                        title.innerText = evt.title;
+                        
+                        overlay.appendChild(title);
+                        if (evt.audio_url) {
+                            const micIcon = document.createElement('span');
+                            micIcon.className = 'absolute top-2 right-2 bg-slate-800 text-white text-xs p-1 rounded-full shadow-md';
+                            micIcon.innerText = '🔊';
+                            div.appendChild(micIcon);
+                        }
+                        
+                        div.appendChild(img);
+                        div.appendChild(overlay);
+                        gallery.appendChild(div);
+                    });
+                }
+            } catch (err) {
+                console.error("Storymode error:", err);
+                showError("Could not load photos for Storymode.");
             }
+        }
+
+        async function openStorymodeModal(eventId, imageUrl, title, existingAudioUrl) {
+            storymodeActiveEventId = eventId;
+            document.getElementById('storymode-modal-img').src = imageUrl;
+            
+            // Sync Kiosk Display immediately
+            try {
+                await fetch(`http://${window.location.hostname}:3000/api/kiosk/focus`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event_id: eventId, account_id: GLOBAL_ACCOUNT_ID })
+                });
+            } catch (e) {
+                console.warn("Could not sync kiosk:", e);
+            }
+
+            // Reset modal state
+            document.getElementById('storymode-btn-start').classList.remove('hidden');
+            document.getElementById('storymode-btn-start').classList.add('flex');
+            document.getElementById('storymode-btn-stop').classList.add('hidden');
+            document.getElementById('storymode-btn-stop').classList.remove('flex');
+            document.getElementById('storymode-record-timer').classList.add('hidden');
+            document.getElementById('storymode-record-timer').innerText = "00:00";
+            
+            const playbackContainer = document.getElementById('storymode-playback-container');
+            const playbackAudio = document.getElementById('storymode-audio-playback');
+            if (existingAudioUrl) {
+                playbackAudio.src = existingAudioUrl;
+                playbackContainer.classList.remove('hidden');
+                playbackContainer.classList.add('flex');
+            } else {
+                playbackAudio.src = "";
+                playbackContainer.classList.add('hidden');
+                playbackContainer.classList.remove('flex');
+            }
+
+            storymodeAudioBase64 = existingAudioUrl || null;
+            document.getElementById('storymode-btn-save').disabled = !storymodeAudioBase64;
+            
+            document.getElementById('storymode-record-modal').classList.remove('hidden');
+        }
+
+        function closeStorymodeModal() {
+            document.getElementById('storymode-record-modal').classList.add('hidden');
+            if (storymodeMediaRecorder && storymodeMediaRecorder.state !== 'inactive') {
+                storymodeStopRecording();
+            }
+        }
+
+        async function storymodeStartRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                storymodeMediaRecorder = new MediaRecorder(stream);
+                storymodeAudioChunks = [];
+                storymodeAudioBlob = null;
+                storymodeAudioBase64 = null;
+                
+                storymodeMediaRecorder.ondataavailable = e => { if (e.data.size > 0) storymodeAudioChunks.push(e.data); };
+                storymodeMediaRecorder.onstop = () => {
+                    storymodeAudioBlob = new Blob(storymodeAudioChunks, { type: 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        storymodeAudioBase64 = reader.result;
+                        const audioPlayback = document.getElementById('storymode-audio-playback');
+                        audioPlayback.src = storymodeAudioBase64;
+                        document.getElementById('storymode-playback-container').classList.remove('hidden');
+                        document.getElementById('storymode-playback-container').classList.add('flex');
+                        document.getElementById('storymode-btn-save').disabled = false;
+                    };
+                    reader.readAsDataURL(storymodeAudioBlob);
+                };
+
+                storymodeMediaRecorder.start();
+                
+                document.getElementById('storymode-btn-start').classList.add('hidden');
+                document.getElementById('storymode-btn-start').classList.remove('flex');
+                document.getElementById('storymode-btn-stop').classList.remove('hidden');
+                document.getElementById('storymode-btn-stop').classList.add('flex');
+                document.getElementById('storymode-record-timer').classList.remove('hidden');
+                document.getElementById('storymode-playback-container').classList.add('hidden');
+                
+                storymodeSeconds = 0;
+                document.getElementById('storymode-record-timer').innerText = "00:00";
+                storymodeTimerInterval = setInterval(() => {
+                    storymodeSeconds++;
+                    const m = String(Math.floor(storymodeSeconds / 60)).padStart(2, '0');
+                    const s = String(storymodeSeconds % 60).padStart(2, '0');
+                    document.getElementById('storymode-record-timer').innerText = `${m}:${s}`;
+                }, 1000);
+            } catch (err) {
+                if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+                    alert("Microphone access is disabled. Please open your phone's Settings > Browser and enable Microphone access to record stories.");
+                } else {
+                    alert("Could not access microphone: " + err.message);
+                }
+            }
+        }
+
+        function storymodeStopRecording() {
+            if (storymodeMediaRecorder && storymodeMediaRecorder.state !== 'inactive') {
+                storymodeMediaRecorder.stop();
+                storymodeMediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+            clearInterval(storymodeTimerInterval);
+            document.getElementById('storymode-btn-stop').classList.add('hidden');
+            document.getElementById('storymode-btn-stop').classList.remove('flex');
+            document.getElementById('storymode-btn-start').classList.remove('hidden');
+            document.getElementById('storymode-btn-start').classList.add('flex');
+            document.getElementById('storymode-record-timer').classList.add('hidden');
+        }
+
+        async function storymodeSaveRecording() {
+            if (!storymodeAudioBase64 || !storymodeActiveEventId) return;
+            
+            const btn = document.getElementById('storymode-btn-save');
+            btn.disabled = true;
+            btn.innerText = "Saving...";
+            
+            try {
+                // Since there is no dedicated audio update endpoint yet, we will fetch the event and PUT it back
+                const fetchRes = await fetch(`http://${window.location.hostname}:3000/api/events?account_id=${GLOBAL_ACCOUNT_ID}`);
+                const events = await fetchRes.json();
+                const evt = events.find(e => e.id === storymodeActiveEventId);
+                
+                if (evt) {
+                    evt.audio_url = storymodeAudioBase64;
+                    const saveRes = await fetch(`http://${window.location.hostname}:3000/api/events/${storymodeActiveEventId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(evt)
+                    });
+                    
+                    if (saveRes.ok) {
+                        closeStorymodeModal();
+                        loadStorymode(); // Refresh gallery
+                    } else {
+                        alert("Failed to save audio");
+                    }
+                }
+            } catch (err) {
+                alert("Error saving audio: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Save";
+        }
         }
 
         function stopRecording() {
