@@ -474,10 +474,10 @@ async fn serve_uploader() -> Html<&'static str> {
   Html(include_str!("uploader.html"))
 }
 
-async fn serve_tailwind() -> impl axum::response::IntoResponse {
+async fn serve_uploader_css() -> impl axum::response::IntoResponse {
   (
-    [(axum::http::header::CONTENT_TYPE, "application/javascript")],
-    include_str!("tailwind.js"),
+    [(axum::http::header::CONTENT_TYPE, "text/css")],
+    include_str!("uploader.css"),
   )
 }
 
@@ -601,7 +601,7 @@ pub fn run() {
           .route("/api/change-password", post(api_change_password))
           .route("/api/accounts/{account_id}", get(api_get_account_profile))
           .route("/api/setup-wifi", post(api_setup_wifi))
-          .route("/tailwind.js", get(serve_tailwind))
+          .route("/uploader.css", get(serve_uploader_css))
           .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
           .with_state(axum_state)
           .layer(CorsLayer::permissive());
